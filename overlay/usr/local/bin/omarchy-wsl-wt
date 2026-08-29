@@ -351,9 +351,13 @@ def offer_nerd_font(face: str) -> None:
 
     pkgs = {
         "JetBrainsMono Nerd Font": "DEVCOM.JetBrainsMonoNerdFont",
-        "Hack Nerd Font": "SourceFoundry.HackFonts",
         "CaskaydiaCove Nerd Font": "DEVCOM.CascadiaCodeNerdFont",
+        "FiraCode Nerd Font": "DEVCOM.FiraCodeNerdFont",
     }
+    print()
+    note("Note: 'SourceFoundry.HackFonts' installs PLAIN Hack, which has no")
+    note("Nerd Font glyphs. There is no reliable Hack Nerd Font winget package -")
+    note("get it from https://www.nerdfonts.com/font-downloads if you want Hack.")
     print()
     faces = list(pkgs)
     for i, f in enumerate(faces, 1):
@@ -380,7 +384,10 @@ def offer_nerd_font(face: str) -> None:
         subprocess.run(["winget.exe", "install", "--id", pkgs[chosen],
                         "--accept-source-agreements", "--accept-package-agreements"],
                        timeout=600, cwd="/mnt/c")
-        ok(f"{chosen} installed - restart Windows Terminal to pick it up")
+        ok(f"{chosen} installed")
+        warn("Now set the profile font face to exactly:")
+        print(f"      {_c('1', chosen)}")
+        note("and fully restart Windows Terminal so it sees the new font.")
     except FileNotFoundError:
         bad("winget.exe not found. Download from https://www.nerdfonts.com/font-downloads")
     except subprocess.TimeoutExpired:

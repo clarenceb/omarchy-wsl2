@@ -128,14 +128,28 @@ install time. To change it later, edit Windows Terminal's `settings.json`
 
 Omarchy's prompt, `eza` icons and Neovim UI all use Nerd Font glyphs. The font
 is installed *inside* the distro, but **Windows Terminal renders with Windows
-fonts**, so you must install it on the Windows side too:
+fonts**, so you must install one on the Windows side too:
 
 ```powershell
 winget install --id DEVCOM.JetBrainsMonoNerdFont
 ```
 
-Or download from [nerdfonts.com](https://www.nerdfonts.com/font-downloads) and
-install the `JetBrainsMono` TTFs.
+> **A plain font is not a Nerd Font.** `SourceFoundry.HackFonts` installs
+> ordinary Hack — same letterforms, *no* icon glyphs. Nerd Font variants always
+> carry `Nerd Font` in the name and ship files like
+> `HackNerdFont-Regular.ttf`. There is no reliable Hack Nerd Font winget
+> package; download it from
+> [nerdfonts.com](https://www.nerdfonts.com/font-downloads) if you want Hack.
+
+Then set the profile's font face to the **exact** installed name — e.g.
+`JetBrainsMono Nerd Font`, not `JetBrainsMono` — and fully restart Windows
+Terminal so it re-enumerates fonts.
+
+Check what is actually installed:
+
+```powershell
+ls $env:LOCALAPPDATA\Microsoft\Windows\Fonts | Select-String -Pattern "Nerd|NF"
+```
 
 Without this you'll see `` boxes instead of icons.
 

@@ -265,9 +265,22 @@ instructions for building the missing packages from source.
 - ~15 GB free disk for a `desktop` build (~4 GB for `headless`)
 - `curl`, `tar`, `gzip`, `make`, `git`, `python3` on the build host
 
+**On Windows, for the intended look:**
+
+- **Windows Terminal** — `winget install Microsoft.WindowsTerminal`
+- **A Nerd Font** — `winget install --id DEVCOM.JetBrainsMonoNerdFont`
+
+  The font must be installed on **Windows**, not inside the distro: Windows
+  Terminal renders with Windows fonts. Without one, Omarchy's prompt and `eza`
+  icons appear as `` boxes.
+
+  > Careful: `SourceFoundry.HackFonts` installs **plain Hack**, which has *no*
+  > Nerd Font glyphs. Nerd Font variants are named `... Nerd Font`. For Hack
+  > specifically, download it from
+  > [nerdfonts.com](https://www.nerdfonts.com/font-downloads).
+
 `./omarchy-wsl2` → option 1 checks all of this and offers to install whatever
-is missing, including the optional Windows-side extras (Nerd Font, Windows
-Terminal, VS Code) via `winget`.
+is missing, including the optional Windows-side extras via `winget`.
 
 ### Do I need PowerShell?
 
