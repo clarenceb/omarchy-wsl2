@@ -13,7 +13,7 @@ offers to set a password. Then you land in a themed bash shell.
 
 ```bash
 omarchy-wsl-help        # the cheat sheet
-omarchy-wsl-doctor      # verify WSLg, GPU, systemd, Hyprland
+omarchy-wsl-doctor      # verify WSLg, GPU, systemd, desktop readiness
 fastfetch               # the obligatory screenshot
 ```
 
@@ -26,7 +26,7 @@ fastfetch               # the obligatory screenshot
 | `~/.config/` | **Your** dotfiles, seeded from Omarchy's `config/` |
 | `~/.config/omarchy/current/theme` | Symlink to the active theme |
 | `~/.config/omarchy-wsl2/env.sh` | WSLg environment, sourced by `.bashrc` |
-| `~/.config/hypr/conf/wsl.conf` | WSL-specific Hyprland overrides |
+| `~/.config/sway/local.conf` | Your desktop overrides (included last) |
 | `/etc/omarchy.conf` | `OMARCHY_PATH` and version |
 | `/etc/wsl.conf` | systemd, default user, interop |
 | `/usr/local/bin/omarchy-wsl-*` | This project's helpers |
@@ -47,8 +47,8 @@ omarchy-theme-list
 # WSL-specific (this project)
 omarchy-wsl-doctor            # diagnostics
 omarchy-wsl-app <cmd>         # run a GUI app through WSLg
-omarchy-wsl-desktop           # nested Hyprland
-omarchy-wsl-desktop vnc       # headless Hyprland + VNC
+omarchy-wsl-desktop           # nested in a WSLg window
+omarchy-wsl-desktop vnc       # full screen over VNC
 omarchy-wsl-help              # cheat sheet
 ```
 
@@ -114,16 +114,27 @@ appended. Put your own changes at the end, or in a sourced file:
 echo 'alias k=kubectl' >> ~/.bashrc
 ```
 
-### Hyprland
+### The desktop session
 
-Config lives in `~/.config/hypr/`. `hyprland.conf` sources
-`~/.config/hypr/conf/wsl.conf` **last**, so WSL overrides win. Edit that file
-for WSL-specific tweaks and leave the rest of Omarchy's config alone so
-`omarchy-update` can keep it current.
+The compositor is **sway**, not Hyprland — Hyprland cannot start under WSL2 at
+all ([12-wayland-on-wsl2.md](12-wayland-on-wsl2.md)). Config lives in
+`~/.config/sway/`:
+
+| File | Purpose |
+|---|---|
+| `config` | The session, generated at build time. Safe to read, but re-created on rebuild |
+| `local.conf` | **Your overrides.** Included last, so it always wins |
+| `theme.conf` | Colours, written by the theme bridge |
+
+Put your own changes in `local.conf`:
 
 ```bash
-nvim ~/.config/hypr/conf/wsl.conf
+nvim ~/.config/sway/local.conf
+swaymsg reload          # apply without restarting the session
 ```
+
+`~/.config/hypr/` is still present so Omarchy's own config stays readable and
+`omarchy-update` keeps working, but nothing reads it in this session.
 
 ### Neovim
 
@@ -134,29 +145,51 @@ nvim ~/.config/nvim/lua/config/       # your overrides
 Omarchy's Neovim is LazyVim-based. Don't edit the Omarchy-managed files —
 add your own under `lua/plugins/`.
 
-## Hyprland keybindings worth knowing
+## Keybindings worth knowing
 
-These apply in Mode 3. `SUPER` is the Windows key.
+These apply in Mode 3. `SUPER` is the **Windows key**.
+
+**New to tiling? Start with these five.** They are enough to be productive:
 
 | Keys | Action |
 |---|---|
-| `SUPER + Return` | Terminal |
-| `SUPER + Q` | Close window |
+| `SUPER + Return` | Open a terminal |
+| `SUPER + W` | Close the focused window |
 | `SUPER + Space` | Launcher |
+| `SUPER + H` / `SUPER + L` | Move focus left / right |
+| `SUPER + F` | Fullscreen the focused window |
+
+The rest:
+
+| Keys | Action |
+|---|---|
+| `SUPER + J` / `SUPER + K` | Focus down / up (arrows work too) |
+| `SUPER + SHIFT + H/J/K/L` | Move the window itself |
 | `SUPER + 1..9` | Switch workspace |
 | `SUPER + SHIFT + 1..9` | Move window to workspace |
-| `SUPER + arrows` | Move focus |
-| `SUPER + SHIFT + arrows` | Move window |
-| `SUPER + V` | Toggle floating |
-| `SUPER + F` | Fullscreen |
-| `SUPER + ESC` | Lock (unreliable under WSL) |
+| `SUPER + V` / `SUPER + G` | Split vertical / horizontal |
+| `SUPER + T` | Tabbed layout |
+| `SUPER + SHIFT + Space` | Toggle floating for this window |
+| `SUPER + R` | Resize mode — arrows or `hjkl`, `Esc` to finish |
+| `SUPER` + left-drag | Move a floating window |
+| `SUPER` + right-drag | Resize any window |
+| `SUPER + B` / `SUPER + E` | Browser / file manager |
+| `Print` / `SHIFT + Print` | Region screenshot (annotate in satty) / full screen to clipboard |
+| `SUPER + SHIFT + R` | Reload the config |
+| `SUPER + SHIFT + E` | Exit the session |
 
-Full list: `~/.config/hypr/bindings.conf`, or upstream's
-[keybindings manual](https://omarchy.org/manual/).
+Run `omarchy-wsl-help` — it is what the welcome terminal shows on startup.
+
+### Don't want tiling?
+
+```bash
+omarchy-wsl-desktop --floating     # draggable windows with titlebars
+omarchy-wsl-desktop --tiling       # back to Omarchy's model
+```
 
 > In Mode 3a (nested) the outer WSLg compositor claims some `SUPER`
-> combinations before Hyprland sees them. Mode 3b (VNC) doesn't have this
-> problem.
+> combinations before sway sees them. Mode 3b (VNC) doesn't have this
+> problem — another reason to prefer it.
 
 ## Backups
 

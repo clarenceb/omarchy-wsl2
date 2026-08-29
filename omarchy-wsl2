@@ -150,6 +150,9 @@ CFG_PROFILE=desktop
 CFG_THEME="Tokyo Night"
 CFG_TOOLS=""
 CFG_REF=master
+CFG_LAYOUT=tiling
+CFG_DISPLAY=vnc
+CFG_VNCSIZE=1920x1080
 
 # shellcheck disable=SC1090  # config path is intentionally dynamic
 load_conf() {
@@ -158,6 +161,9 @@ load_conf() {
   # default distro name and the image filename.
   [[ $CFG_NAME =~ ^[A-Za-z][A-Za-z0-9._-]*$ ]] || CFG_NAME=omarchy
   case "$CFG_PROFILE" in headless|apps|desktop) ;; *) CFG_PROFILE=desktop ;; esac
+  case "$CFG_LAYOUT"  in tiling|floating) ;; *) CFG_LAYOUT=tiling ;; esac
+  case "$CFG_DISPLAY" in nested|vnc) ;;      *) CFG_DISPLAY=vnc ;; esac
+  [[ $CFG_VNCSIZE =~ ^[0-9]+x[0-9]+$ ]] || CFG_VNCSIZE=1920x1080
   return 0
 }
 save_conf() {
@@ -168,6 +174,9 @@ CFG_PROFILE='$CFG_PROFILE'
 CFG_THEME='$CFG_THEME'
 CFG_TOOLS='$CFG_TOOLS'
 CFG_REF='$CFG_REF'
+CFG_LAYOUT='$CFG_LAYOUT'
+CFG_DISPLAY='$CFG_DISPLAY'
+CFG_VNCSIZE='$CFG_VNCSIZE'
 EOF
 }
 
@@ -402,7 +411,63 @@ ask_profile() {
     "$(case $CFG_PROFILE in headless) echo 1;; apps) echo 2;; *) echo 3;; esac)" \
     "headless|Headless|Terminal only. Neovim, lazygit, btop, themes. ~2GB. Rock solid." \
     "apps|WSLg apps|Terminal + individual GUI apps as Windows windows. ~5GB." \
-    "desktop|Full desktop|Adds Hyprland, nested or over VNC. ~8GB. Experimental."
+    "desktop|Full desktop|Adds a sway tiling desktop, nested or over VNC. ~8GB."
+}
+
+# Desktop-only questions. Hyprland cannot run under WSL2 (see
+# docs/12-wayland-on-wsl2.md), so the session is sway - which means the window
+# behaviour is a genuine choice rather than a fixed part of Omarchy.
+ask_desktop() {
+  [[ $CFG_PROFILE == desktop ]] || return 0
+
+  choose CFG_LAYOUT "How should windows behave?" \
+    "$(case $CFG_LAYOUT in floating) echo 2;; *) echo 1;; esac)" \
+    "tiling|Tiling|Windows auto-arrange, no titlebars. Omarchy's model. Keyboard-driven." \
+    "floating|Floating|Draggable windows with titlebars, like Windows or GNOME."
+
+  choose CFG_DISPLAY "How should the desktop be displayed?" \
+    "$(case $CFG_DISPLAY in nested) echo 1;; *) echo 2;; esac)" \
+    "nested|In a window|One resizable window on your Windows desktop, via WSLg." \
+    "vnc|Full screen (VNC)|A virtual display served over VNC. True full screen."
+
+  [[ $CFG_DISPLAY == vnc ]] || return 0
+
+  local detected; detected=$(detect_screen_size)
+  local picked
+  choose picked "Full-screen resolution?" 1 \
+    "${detected}|${detected}|Matches your Windows display - pixel perfect." \
+    "1920x1080|1920x1080|1080p. Fastest; everything here is CPU-rendered." \
+    "2560x1440|2560x1440|1440p. Sharper, noticeably heavier over VNC." \
+    "custom|Custom|Enter your own WxH."
+
+  if [[ $picked == custom ]]; then
+    while true; do
+      printf '\n  Resolution %s[%s]%s: ' "$GREY" "$CFG_VNCSIZE" "$R"
+      local reply; read -r reply
+      reply=${reply:-$CFG_VNCSIZE}
+      if [[ $reply =~ ^[0-9]+x[0-9]+$ ]]; then CFG_VNCSIZE=$reply; break; fi
+      bad "Enter a size like 1920x1080"
+    done
+  else
+    CFG_VNCSIZE=$picked
+  fi
+}
+
+# Ask Windows for the primary display size, so "match my screen" is a real
+# option rather than a guess. Falls back to 1080p when interop is unavailable.
+detect_screen_size() {
+  local w h
+  w=$(wslx powershell.exe -NoProfile -Command \
+        '(Get-CimInstance Win32_VideoController | Select-Object -First 1).CurrentHorizontalResolution' \
+        2>/dev/null | tr -dc '0-9')
+  h=$(wslx powershell.exe -NoProfile -Command \
+        '(Get-CimInstance Win32_VideoController | Select-Object -First 1).CurrentVerticalResolution' \
+        2>/dev/null | tr -dc '0-9')
+  if [[ $w =~ ^[0-9]+$ && $h =~ ^[0-9]+$ ]] && (( w > 0 && h > 0 )); then
+    echo "${w}x${h}"
+  else
+    echo "1920x1080"
+  fi
 }
 
 ask_theme() {
@@ -495,6 +560,7 @@ do_build_install() {
   done
 
   ask_profile
+  ask_desktop
   ask_theme
   ask_tools
   save_conf
@@ -503,6 +569,14 @@ do_build_install() {
   printf '  %-20s %s\n' "Distro name:"  "$CFG_NAME"
   printf '  %-20s %s\n' "Profile:"      "$CFG_PROFILE"
   printf '  %-20s %s\n' "Theme:"        "$CFG_THEME"
+  if [[ $CFG_PROFILE == desktop ]]; then
+    printf '  %-20s %s\n' "Window layout:" "$CFG_LAYOUT"
+    if [[ $CFG_DISPLAY == vnc ]]; then
+      printf '  %-20s %s\n' "Display:"     "full screen over VNC at $CFG_VNCSIZE"
+    else
+      printf '  %-20s %s\n' "Display:"     "nested in a WSLg window"
+    fi
+  fi
   printf '  %-20s %s\n' "Dev tools:"    "${CFG_TOOLS:-none}"
   printf '  %-20s %s\n' "Architecture:" "$(host_arch)"
   printf '  %-20s %s\n' "Output:"       "$(image_path)"
@@ -586,7 +660,8 @@ do_build_install() {
   check_prereqs no || { bad "Fix the prerequisites first (menu option 1)."; return 1; }
 
   local -a mkargs=(PROFILE="$CFG_PROFILE" NAME="$CFG_NAME"
-                   OMARCHY_THEME="$CFG_THEME" OMARCHY_REF="$CFG_REF")
+                   OMARCHY_THEME="$CFG_THEME" OMARCHY_REF="$CFG_REF"
+                   OMARCHY_LAYOUT="$CFG_LAYOUT")
 
   if (( reuse )); then
     note "Reusing $(basename "$(image_path)")"
@@ -607,8 +682,16 @@ do_build_install() {
   printf '\n'
   note "Start it with:      wsl -d $CFG_NAME"
   note "Check readiness:    wsl -d $CFG_NAME -- omarchy-wsl-doctor"
-  [[ $CFG_PROFILE == desktop ]] && \
-    note "Launch the desktop: wsl -d $CFG_NAME -- omarchy-wsl-desktop"
+  if [[ $CFG_PROFILE == desktop ]]; then
+    if [[ $CFG_DISPLAY == vnc ]]; then
+      note "Launch the desktop: wsl -d $CFG_NAME -- omarchy-wsl-desktop vnc --size $CFG_VNCSIZE"
+      note "  then point a VNC client at 127.0.0.1:5900"
+      note "  no client yet?     winget install -e --id TigerVNC.TigerVNC"
+    else
+      note "Launch the desktop: wsl -d $CFG_NAME -- omarchy-wsl-desktop"
+    fi
+    note "Switch layout later: omarchy-wsl-desktop --floating   (or --tiling)"
+  fi
 
   printf '\n'
   if confirm "Style the Windows Terminal profile to match Omarchy now?"; then

@@ -25,6 +25,7 @@ ARCH          ?= $(shell uname -m)
 OMARCHY_REF   ?= master
 OMARCHY_REPO  ?= basecamp/omarchy
 OMARCHY_THEME ?= Tokyo Night
+OMARCHY_LAYOUT ?= tiling
 OMARCHY_USER  ?= omarchy
 # 1001 avoids colliding with the near-universal uid 1000 of other WSL distros.
 OMARCHY_UID   ?= 1001
@@ -39,7 +40,7 @@ BUILD_DIR     ?= $(WIN_ROOT)/build/$(BUILD_DISTRO)
 DIST_DIR      ?= $(WIN_ROOT)/dist
 OUT_NAME      ?= $(NAME)-$(PROFILE)-$(ARCH)
 
-export ARCH OMARCHY_REF OMARCHY_REPO OMARCHY_THEME OMARCHY_USER OMARCHY_UID
+export ARCH OMARCHY_REF OMARCHY_REPO OMARCHY_THEME OMARCHY_LAYOUT OMARCHY_USER OMARCHY_UID
 
 S := ./scripts
 
@@ -80,6 +81,7 @@ help:
 	  'ARCH'          'x86_64 | aarch64            (current: $(ARCH))' \
 	  'OMARCHY_REF'   'Omarchy git ref             (current: $(OMARCHY_REF))' \
 	  'OMARCHY_THEME' 'initial theme               (current: $(OMARCHY_THEME))' \
+	  'OMARCHY_LAYOUT' 'tiling or floating         (current: $(OMARCHY_LAYOUT))' \
 	  'NAME'          'installed distro name       (current: $(NAME))' \
 	  'WIN_ROOT'      'artefact root               (current: $(WIN_ROOT))'
 	@printf '\n  e.g. \033[36mmake all PROFILE=headless\033[0m\n\n'

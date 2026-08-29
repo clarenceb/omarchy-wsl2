@@ -1,6 +1,6 @@
 #!/bin/bash
 # omarchy-wsl-doctor - diagnose whether this WSL2 distro can run Omarchy's
-# CLI, WSLg GUI apps and the nested Hyprland desktop.
+# CLI, WSLg GUI apps and the nested or VNC sway desktop.
 
 set -uo pipefail
 source /usr/local/bin/omarchy-wsl-env

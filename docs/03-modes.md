@@ -225,6 +225,68 @@ omarchy-wsl-desktop vnc --bind 0.0.0.0        # only if you really mean it
 > pass `--bind 0.0.0.0` if you intend to expose it, and set a `wayvnc`
 > password if you do.
 
+### Choosing tiling or floating
+
+Omarchy is a **tiling** environment: windows arrange themselves, have no
+titlebars, and you drive them from the keyboard. That is the point of it — but
+it is a real adjustment if you are coming from Windows or GNOME, so this
+project makes it a choice.
+
+```bash
+omarchy-wsl-desktop --floating     # draggable windows with titlebars
+omarchy-wsl-desktop --tiling       # Omarchy's model (default)
+```
+
+The setting is written to `~/.config/sway/local.conf` and persists. The wizard
+also asks, and `make build OMARCHY_LAYOUT=floating` bakes it into the image.
+
+Either way, per-window control is always available:
+
+| Key | Action |
+|---|---|
+| `SUPER+Shift+Space` | Toggle the focused window between tiled and floating |
+| `SUPER` + left-drag | Move a floating window |
+| `SUPER` + right-drag | Resize any window |
+| `SUPER+R`, then arrows/`hjkl` | Resize a tiled window, `Esc` to finish |
+
+**If you are new to tiling, five keys get you productive:**
+`SUPER+Return` (terminal), `SUPER+W` (close), `SUPER+Space` (launcher),
+`SUPER+H`/`SUPER+L` (focus left/right), `SUPER+F` (fullscreen).
+
+### Running full screen
+
+VNC mode is the right answer — nested mode is a WSLg child window and can only
+ever be as big as that window.
+
+1. **Match your Windows resolution**, so there are no black bars and no
+   scrolling. The wizard detects it for you; manually:
+
+   ```powershell
+   (Get-CimInstance Win32_VideoController).CurrentHorizontalResolution
+   (Get-CimInstance Win32_VideoController).CurrentVerticalResolution
+   ```
+
+2. **Start the desktop at that size:**
+
+   ```bash
+   omarchy-wsl-desktop vnc --size 2560x1440
+   ```
+
+3. **Connect the viewer full-screen:**
+
+   ```powershell
+   & "C:\Program Files\TigerVNC\vncviewer.exe" -FullScreen 127.0.0.1:5900
+   ```
+
+   `F8` in-session opens TigerVNC's menu to toggle full screen or disconnect.
+   For multi-monitor, `F8` → Options → Screen → "Full screen mode: All
+   monitors", with `--size` set to the combined width.
+
+> **Performance note.** Everything is CPU-rendered, so higher resolutions cost
+> real frame time. If 1440p feels sluggish, run `--size 1920x1080` and let
+> TigerVNC scale it up — usually the better trade. See
+> [12-wayland-on-wsl2.md](12-wayland-on-wsl2.md#6-what-this-costs-you).
+
 ### Trying Hyprland anyway
 
 ```bash

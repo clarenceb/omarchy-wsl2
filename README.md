@@ -36,10 +36,19 @@ actual tooling, dotfiles and themes on WSL2, in three usable modes:
 >
 > wlroots *can* run here — it falls back to shared-memory buffers needing no
 > DRM node — so we ship **sway** configured with Omarchy's keybindings, gaps
-> and theme system. You lose Hyprland's animations and the `hypr*` daemons;
-> you keep a real tiling desktop. The full analysis, including a `vkms`
-> experiment that got Hyprland *almost* working, is in
+> and theme system.
+>
+> **The trade-offs:** rendering is on the **CPU** (`pixman`), so terminals and
+> editors are fine but video and WebGL are not; there are **no animations,
+> blur or rounded corners**; **no Xwayland** inside the session; and a
+> **single output** only. You keep the entire Omarchy CLI, themes, app suite,
+> waybar and clipboard integration. Full detail, including a `vkms` experiment
+> that got Hyprland *almost* working, is in
 > **[docs/12-wayland-on-wsl2.md](docs/12-wayland-on-wsl2.md)**.
+>
+> Windows can **tile** (Omarchy's model) or **float** with titlebars if you
+> prefer Windows/GNOME behaviour — the wizard asks, and
+> `omarchy-wsl-desktop --floating` switches any time.
 > If you want Hyprland itself on Windows, use a Hyper-V VM.
 
 ---
@@ -82,6 +91,22 @@ The wizard walks you through everything:
 It is **re-runnable** — run it again any time to change theme, add the desktop
 tier, install dev tools, or rebuild.
 
+When you pick the **Full desktop** profile, the wizard also asks how you want
+it to behave:
+
+| Question | Options |
+|---|---|
+| **How should windows behave?** | **Tiling** — auto-arranged, no titlebars, Omarchy's model · **Floating** — draggable windows with titlebars, like Windows or GNOME |
+| **How should the desktop be displayed?** | **In a window** — nested in WSLg · **Full screen (VNC)** — a virtual display over VNC |
+| **Full-screen resolution?** | Your detected Windows resolution, 1920x1080, 2560x1440, or a custom size |
+
+Both are changeable later without a rebuild:
+
+```bash
+omarchy-wsl-desktop --floating          # or --tiling
+omarchy-wsl-desktop vnc --size 2560x1440
+```
+
 ### Prefer the Makefile?
 
 ```bash
@@ -96,6 +121,12 @@ Build a lighter image if you only want the terminal:
 
 ```bash
 make all PROFILE=headless
+```
+
+Or bake the floating layout into the image:
+
+```bash
+make all PROFILE=desktop OMARCHY_LAYOUT=floating
 ```
 
 ---

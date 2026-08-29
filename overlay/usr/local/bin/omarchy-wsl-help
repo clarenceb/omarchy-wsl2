@@ -15,10 +15,39 @@ cat <<'EOF'
     omarchy-wsl-app foot           Omarchy's terminal
     (GUI apps also work directly once you have logged in interactively)
 
-  MODE 3  Full Hyprland desktop
+  MODE 3  Full desktop (sway - Hyprland cannot run under WSL2)
     omarchy-wsl-desktop            nested inside WSLg (one window)
-    omarchy-wsl-desktop vnc        headless + VNC on 127.0.0.1:5900
+    omarchy-wsl-desktop vnc        full screen over VNC on 127.0.0.1:5900
     omarchy-wsl-desktop vnc --size 2560x1440 --port 5901
+    omarchy-wsl-desktop --floating draggable windows with titlebars
+    omarchy-wsl-desktop --tiling   back to Omarchy's tiling model
+
+  KEYS IN THE DESKTOP   (SUPER = the Windows key)
+    New to tiling? These five are enough to get started:
+      SUPER+Return      open a terminal
+      SUPER+W           close the focused window
+      SUPER+Space       launcher
+      SUPER+H / L       move focus left / right
+      SUPER+F           fullscreen
+
+    Then:
+      SUPER+J / K            focus down / up (arrows work too)
+      SUPER+Shift+H/J/K/L    move the window itself
+      SUPER+1..9             switch workspace
+      SUPER+Shift+1..9       move window to workspace
+      SUPER+V / G            split vertical / horizontal
+      SUPER+T                tabbed layout
+      SUPER+Shift+Space      toggle floating for this window
+      SUPER+R                resize mode (arrows/hjkl, Esc to finish)
+      SUPER + left-drag      move a floating window
+      SUPER + right-drag     resize any window
+      SUPER+B / E            browser / file manager
+      Print / Shift+Print    region screenshot / full screen to clipboard
+      SUPER+Shift+R          reload config
+      SUPER+Shift+E          exit the session
+
+    Note: nested in WSLg, Windows claims some SUPER combos first.
+          VNC mode does not have this problem.
 
   THEMING
     omarchy-theme-set "Tokyo Night"      switch theme
@@ -31,7 +60,7 @@ cat <<'EOF'
     pacman -Q                      list what's installed
 
   DIAGNOSTICS
-    omarchy-wsl-doctor             check WSLg / GPU / systemd / Hyprland
+    omarchy-wsl-doctor             check WSLg / GPU / systemd / desktop
 
   APPEARANCE
     omarchy-wsl-wt -i              style the Windows Terminal profile
@@ -51,6 +80,8 @@ cat <<'EOF'
     code .                         open VS Code (WSL remote)
     wsl.exe --shutdown             (from Windows) restart the VM
 
-  Docs: https://omarchy.org/manual/  and  ./docs in this repo
+  Docs: /usr/share/omarchy-wsl2/docs  (start with 03-modes.md)
+        Why sway and not Hyprland: 12-wayland-on-wsl2.md
+        Upstream manual: https://omarchy.org/manual/
 
 EOF

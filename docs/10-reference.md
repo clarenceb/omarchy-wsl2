@@ -61,6 +61,7 @@ omarchy-wsl2/
 | `OMARCHY_REF` | `master` | Omarchy git ref |
 | `OMARCHY_REPO` | `basecamp/omarchy` | Upstream repo |
 | `OMARCHY_THEME` | `Tokyo Night` | Build-time theme |
+| `OMARCHY_LAYOUT` | `tiling` | Desktop window behaviour: `tiling` or `floating` |
 | `OMARCHY_USER` | `omarchy` | Baked uid 1000 account |
 | `WIN_ROOT` | `/mnt/c/wsl/omarchy-wsl2` | Artefact root |
 | `CACHE_DIR` | `$(WIN_ROOT)/cache` | Downloaded rootfs |
@@ -99,7 +100,13 @@ no WSL/VM auto-detection anywhere in the installer.
 | `ALARM_URL` | build | Override the Arch Linux ARM rootfs URL |
 | `GALLIUM_DRIVER` | runtime | `d3d12` for WSLg GPU acceleration |
 | `WLR_BACKENDS` | runtime | `wayland` (nested) or `headless` (VNC) |
-| `WLR_RENDERER` | runtime | `pixman` forces software rendering |
+| `WLR_RENDERER` | runtime | `pixman` - CPU rendering; WSL2 has no DRM node to bind GLES2/Vulkan to |
+| `WLR_HEADLESS_OUTPUTS` | runtime | Virtual outputs in VNC mode (always 1) |
+| `WLR_WL_OUTPUTS` | runtime | Outputs in nested mode (always 1) |
+| `WLR_NO_HARDWARE_CURSORS` | runtime | Always 1 - no DRM planes for a hardware cursor |
+| `WLR_LIBINPUT_NO_DEVICES` | runtime | Always 1 - input arrives from WSLg or wayvnc |
+| `AQ_TRACE` | runtime | Aquamarine backend trace, for diagnosing Hyprland's failure |
+| `GBM_ALWAYS_SOFTWARE` | runtime | Forces mesa's software GBM path; part of the vkms experiment |
 
 ## WSL configuration reference
 

@@ -82,6 +82,18 @@ bindsym \$mod+g splith
 bindsym \$mod+t layout tabbed
 bindsym \$mod+Shift+space floating toggle
 
+# Mouse handling. Tiled windows have no titlebar to grab - that is the point
+# of a tiling WM - so dragging is done with the modifier held:
+#   SUPER + left-drag   move a floating window
+#   SUPER + right-drag  resize any window
+floating_modifier \$mod normal
+
+# Keyboard resizing for tiled windows.
+bindsym \$mod+r mode "resize"
+
+# Floating windows get a real titlebar, so dialogs stay draggable by mouse.
+for_window [floating] border normal 2
+
 # workspaces
 EOF
 
@@ -99,6 +111,21 @@ cat >>/etc/skel/.config/sway/config <<'EOF'
 # verbatim and is evaluated at keypress time.
 bindsym Print exec grim -g "$(slurp)" - | satty -f -
 bindsym Shift+Print exec grim - | wl-copy
+
+# --- resize mode ----------------------------------------------------------
+# SUPER+R enters it; arrows or hjkl resize; Escape/Enter leaves.
+mode "resize" {
+    bindsym h resize shrink width 40px
+    bindsym j resize grow height 40px
+    bindsym k resize shrink height 40px
+    bindsym l resize grow width 40px
+    bindsym Left  resize shrink width 40px
+    bindsym Down  resize grow height 40px
+    bindsym Up    resize shrink height 40px
+    bindsym Right resize grow width 40px
+    bindsym Return mode "default"
+    bindsym Escape mode "default"
+}
 
 # --- appearance -----------------------------------------------------------
 # Omarchy's gaps-and-rounded-corners feel. Colours are overwritten by
@@ -163,6 +190,25 @@ chmod 0644 /etc/skel/.config/sway/config
 # `include` on a missing file is a hard error in sway, so ship empty stubs.
 : >/etc/skel/.config/sway/theme.conf
 : >/etc/skel/.config/sway/local.conf
+
+# Tiling is Omarchy's model, but it is a big adjustment coming from Windows
+# or GNOME. OMARCHY_LAYOUT=floating bakes the familiar behaviour in instead;
+# either way `omarchy-wsl-desktop --floating/--tiling` flips it at runtime.
+if [[ ${OMARCHY_LAYOUT:-tiling} == floating ]]; then
+  info "  default window layout: floating"
+  cat >/etc/skel/.config/sway/local.conf <<'EOF'
+# >>> omarchy-wsl2 layout >>>
+# Windows float with titlebars, like Windows or GNOME.
+# Switch back with: omarchy-wsl-desktop --tiling
+for_window [app_id=".*"] floating enable
+for_window [class=".*"] floating enable
+default_border normal 2
+# <<< omarchy-wsl2 layout <<<
+EOF
+else
+  info "  default window layout: tiling"
+fi
+
 chmod 0644 /etc/skel/.config/sway/theme.conf /etc/skel/.config/sway/local.conf
 
 # ---------------------------------------------------------------- waybar ---

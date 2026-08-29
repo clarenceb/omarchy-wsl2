@@ -246,7 +246,59 @@ flowchart TD
 
 ---
 
-## 6. Summary table
+## 6. What this costs you
+
+Getting a desktop at all means accepting four real trade-offs. None are
+configuration mistakes; all are consequences of WSL2 having no DRM device.
+
+### CPU rendering (the big one)
+
+`WLR_RENDERER=pixman` renders every pixel on the CPU. There is no way around
+this: GLES2 and Vulkan need a DRM render node to bind to, and WSL2 has none.
+The D3D12 acceleration you see in `omarchy-wsl-doctor` is real, but it is only
+reachable by **WSLg clients**, not by a compositor running inside the distro.
+
+In practice:
+
+| Workload | Experience |
+|---|---|
+| Terminals, editors, file manager | Fine - indistinguishable from native |
+| Web browsing, scrolling | Usable; heavy pages feel soft |
+| Video playback, WebGL, games | Poor. Use `omarchy-wsl-app mpv` instead |
+| 4K / 1440p full screen | Noticeably heavier than 1080p |
+
+The workaround for anything GPU-bound is to run it **outside** the session:
+`omarchy-wsl-app chromium` goes straight to WSLg and gets D3D12.
+
+### No Hyprland eye-candy
+
+Animations, blur, rounded window corners, and the `hypr*` daemons (`hyprlock`,
+`hypridle`, `hyprsunset`) are Hyprland features. sway implements none of them,
+so the desktop is flat and instant rather than animated. The wallpaper, the
+pill bar and the theme colours are doing the visual work instead.
+
+### No Xwayland inside the session
+
+WSLg owns `/tmp/.X11-unix` and every display slot in it, so sway's Xwayland
+cannot claim one and we disable it. Every app shipped in the image is
+Wayland-native, so this rarely matters - but a genuinely X11-only app must be
+run through WSLg with `omarchy-wsl-app`, not from inside the desktop.
+
+### Single output, and VNC latency
+
+The headless backend gives one virtual output; there is no multi-monitor. Over
+VNC you also pay a round-trip on every frame, which is why 1080p often feels
+better than 1440p even though both are "working".
+
+### What you keep
+
+Everything above the compositor is untouched: the Omarchy CLI and themes,
+Neovim, lazygit, btop, the whole app suite, waybar, notifications, the
+launcher, and clipboard integration with Windows.
+
+---
+
+## 7. Summary table
 
 | Approach | Furthest point reached | Blocker |
 |---|---|---|
@@ -258,7 +310,7 @@ flowchart TD
 
 ---
 
-## 7. What would have to change upstream
+## 8. What would have to change upstream
 
 Any *one* of these would make Hyprland viable on WSL2:
 
@@ -276,7 +328,7 @@ Any *one* of these would make Hyprland viable on WSL2:
 Until then, `--compositor hyprland` exists only to demonstrate the failure
 and to start working automatically if item 1 ever lands.
 
-## 8. Reproducing this yourself
+## 9. Reproducing this yourself
 
 ```bash
 # The nested failure (WSLg protocol gap)

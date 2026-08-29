@@ -34,6 +34,8 @@
 #   --size WxH        virtual output size for vnc mode  (default 1920x1080)
 #   --port N          VNC port                          (default 5900)
 #   --bind ADDR       VNC bind address                  (default 127.0.0.1)
+#   --floating        windows float with titlebars, like Windows/GNOME
+#   --tiling          windows tile automatically (the Omarchy default)
 #   --compositor C    sway (default) or hyprland (known-broken, see above)
 #   --software        accepted for compatibility; already the default
 #   -h, --help        this message
@@ -47,7 +49,7 @@ PORT="5900"
 BIND="127.0.0.1"
 COMPOSITOR="sway"
 
-usage() { sed -n '24,40p' "$0" | sed 's/^# \?//'; exit "${1:-0}"; }
+usage() { sed -n '24,42p' "$0" | sed 's/^# \?//'; exit "${1:-0}"; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -55,6 +57,8 @@ while [[ $# -gt 0 ]]; do
     --size)       SIZE="${2:?--size needs WxH}"; shift 2 ;;
     --port)       PORT="${2:?--port needs a number}"; shift 2 ;;
     --bind)       BIND="${2:?--bind needs an address}"; shift 2 ;;
+    --floating)   LAYOUT=floating; shift ;;
+    --tiling)     LAYOUT=tiling; shift ;;
     --compositor) COMPOSITOR="${2:?--compositor needs sway or hyprland}"; shift 2 ;;
     --software)   shift ;;
     -h|--help)    usage 0 ;;
@@ -64,6 +68,45 @@ done
 
 [[ $SIZE =~ ^[0-9]+x[0-9]+$ ]] || { echo "--size must look like 1920x1080" >&2; exit 1; }
 [[ $PORT =~ ^[0-9]+$ ]]        || { echo "--port must be a number" >&2; exit 1; }
+
+# ---------------------------------------------------------------------------
+# Layout preference is persisted into ~/.config/sway/local.conf, which the
+# session config includes last, so it wins over the defaults. Tiling is
+# Omarchy's model; floating is the familiar Windows/GNOME behaviour and is
+# there so people can get productive before learning the keybindings.
+# ---------------------------------------------------------------------------
+LOCAL_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/sway/local.conf"
+MARK_BEGIN="# >>> omarchy-wsl2 layout >>>"
+MARK_END="# <<< omarchy-wsl2 layout <<<"
+
+apply_layout() {
+  local want="$1"
+  [[ -z $want ]] && return 0
+  mkdir -p "$(dirname "$LOCAL_CONF")"
+  touch "$LOCAL_CONF"
+
+  # Drop any previous block, then re-add if needed.
+  if grep -qF "$MARK_BEGIN" "$LOCAL_CONF" 2>/dev/null; then
+    sed -i "/^${MARK_BEGIN}$/,/^${MARK_END}$/d" "$LOCAL_CONF"
+  fi
+
+  if [[ $want == floating ]]; then
+    cat >>"$LOCAL_CONF" <<EOF
+$MARK_BEGIN
+# Windows float with titlebars, like Windows or GNOME.
+# Switch back with: omarchy-wsl-desktop --tiling
+for_window [app_id=".*"] floating enable
+for_window [class=".*"] floating enable
+default_border normal 2
+$MARK_END
+EOF
+    echo "Layout: floating (draggable windows with titlebars)"
+  else
+    echo "Layout: tiling (Omarchy default)"
+  fi
+}
+
+apply_layout "${LAYOUT:-}"
 
 owsl_export_wslg_env
 

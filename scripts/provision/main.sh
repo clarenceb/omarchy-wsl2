@@ -28,6 +28,7 @@ export OMARCHY_UID="${OMARCHY_UID:-1001}"
 export OMARCHY_REF="${OMARCHY_REF:-master}"
 export OMARCHY_REPO="${OMARCHY_REPO:-basecamp/omarchy}"
 export OMARCHY_THEME="${OMARCHY_THEME:-Tokyo Night}"
+export OMARCHY_LAYOUT="${OMARCHY_LAYOUT:-tiling}"
 export OMARCHY_SHARE=/usr/share/omarchy
 
 g() { printf '\n\033[1;35m### %s\033[0m\n' "$*"; }
