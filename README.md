@@ -25,15 +25,22 @@ actual tooling, dotfiles and themes on WSL2, in three usable modes:
 |---|---|---|
 | **1. Headless** | Full Omarchy CLI/TUI: Neovim, lazygit, btop, fzf, starship, themes | ✅ Works well |
 | **2. WSLg apps** | Individual GUI apps as ordinary Windows windows | ✅ Works well |
-| **3. Full desktop** | Hyprland — nested in a window, or headless over VNC | ⚠️ Experimental |
+| **3. Full desktop** | A tiling **sway** session with Omarchy's keys and theming — nested in a window, or over VNC | ✅ Works |
 
-> **Honest expectations.** Mode 3 cannot give you Omarchy exactly as it is on
-> bare metal. WSL2 has no KMS-capable `/dev/dri/cardN`, so Hyprland's DRM
-> backend aborts with `wlr_backend_get_drm_fd() failed!`
-> ([hyprwm/Hyprland#3479](https://github.com/hyprwm/Hyprland/issues/3479), where
-> the maintainer's full reply was "no"). We work around this by running Hyprland
-> **nested** or **headless + VNC**. It is good; it is not native.
-> If you want the real thing on Windows, use a Hyper-V VM.
+> **Honest expectations.** Mode 3 is not Hyprland, because **Hyprland cannot
+> run on WSL2 at all**. Its backend (Aquamarine) requires a GBM allocator
+> built from a DRM node, and WSL2 exposes no DRM device — only `/dev/dxg`.
+> WSLg also doesn't advertise `zwp_linux_dmabuf_v1`, so nesting fails too
+> ([hyprwm/Hyprland#3479](https://github.com/hyprwm/Hyprland/issues/3479),
+> where the maintainer's full reply was "no").
+>
+> wlroots *can* run here — it falls back to shared-memory buffers needing no
+> DRM node — so we ship **sway** configured with Omarchy's keybindings, gaps
+> and theme system. You lose Hyprland's animations and the `hypr*` daemons;
+> you keep a real tiling desktop. The full analysis, including a `vkms`
+> experiment that got Hyprland *almost* working, is in
+> **[docs/12-wayland-on-wsl2.md](docs/12-wayland-on-wsl2.md)**.
+> If you want Hyprland itself on Windows, use a Hyper-V VM.
 
 ---
 
@@ -144,7 +151,7 @@ flowchart LR
     S0["00-pacman<br/>keyring, mirrors,<br/>disable sandbox"] --> S1["10-base<br/>CLI/TUI tier"]
     S1 --> S2["20-omarchy<br/>vendor bin/ config/<br/>themes/ + repo"]
     S2 --> S3["30-apps<br/>WSLg GUI tier"]
-    S3 --> S4["40-desktop<br/>Hyprland tier"]
+    S3 --> S4["40-desktop<br/>sway desktop tier"]
     S4 --> S5["50-user<br/>uid 1000 + sudo"]
     S5 --> S6["60-wsl<br/>wsl.conf, OOBE,<br/>icon, helpers"]
     S6 --> S7["70-theme<br/>headless theming"]
@@ -178,8 +185,8 @@ flowchart TB
     subgraph DISTRO["omarchy WSL2 distro"]
         SH["bash / Omarchy CLI"]
         APP["chromium, foot, mpv<br/>Wayland clients"]
-        HYPRN["Hyprland<br/>Wayland backend"]
-        HYPRH["Hyprland<br/>headless backend"]
+        HYPRN["sway<br/>wayland backend"]
+        HYPRH["sway<br/>headless backend"]
         WV["wayvnc"]
     end
 
@@ -208,16 +215,17 @@ wsl -d omarchy
 # Mode 2 - one GUI app at a time, through WSLg
 omarchy-wsl-app chromium
 
-# Mode 3a - nested Hyprland (a single window on your Windows desktop)
+# Mode 3a - nested tiling desktop (a single window on your Windows desktop)
 omarchy-wsl-desktop
 
-# Mode 3b - headless Hyprland + VNC (resizable, full-screen capable)
+# Mode 3b - headless desktop + VNC (resizable, full-screen capable)
 omarchy-wsl-desktop vnc --size 2560x1440
 #   then connect a Windows VNC client to 127.0.0.1:5900
 ```
 
-Full detail, including which Hyprland features do and don't survive:
-**[docs/03-modes.md](docs/03-modes.md)**.
+Full detail, including which Omarchy features do and don't survive:
+**[docs/03-modes.md](docs/03-modes.md)**. Why it's sway and not Hyprland:
+**[docs/12-wayland-on-wsl2.md](docs/12-wayland-on-wsl2.md)**.
 
 ---
 
@@ -228,12 +236,16 @@ Full detail, including which Hyprland features do and don't survive:
 | **x86_64** | Official [Arch Linux WSL image](https://geo.mirror.pkgbuild.com/wsl/latest/) | ✅ 200+ packages | Fully supported |
 | **aarch64** (Windows on ARM) | [Arch Linux ARM](https://archlinuxarm.org) | ⚠️ 1 package (keyring only) | Works, with substitutions |
 
-**ARM64 is genuinely viable.** Arch Linux ARM ships `hyprland`, `quickshell`,
-`waybar`, `wayvnc`, `foot` and `seatd` for aarch64, so the desktop tier builds.
-What you lose is Omarchy's own x86_64-only repo — `walker`, `elephant`,
-`omarchy-nvim`, `omacalc` and friends. The build substitutes equivalents and
-logs anything it couldn't install. Upstream's installer also hard-blocks
-non-x86_64 (`guard.sh:26-28`), which is one more reason we don't run it.
+**ARM64 is genuinely viable.** Arch Linux ARM ships `sway`, `waybar`,
+`wayvnc`, `foot` and `seatd` for aarch64, so the desktop tier builds. What you
+lose is Omarchy's own x86_64-only repo — `walker`, `elephant`, `omarchy-nvim`,
+`omacalc` and friends. The build substitutes equivalents and logs anything it
+couldn't install. Upstream's installer also hard-blocks non-x86_64
+(`guard.sh:26-28`), which is one more reason we don't run it.
+
+Note that the desktop tier is CPU-rendered (`pixman`) on **every**
+architecture, not just ARM — see
+[docs/12-wayland-on-wsl2.md](docs/12-wayland-on-wsl2.md).
 
 See **[docs/08-arm64.md](docs/08-arm64.md)** for the substitution table and
 instructions for building the missing packages from source.
@@ -255,6 +267,7 @@ instructions for building the missing packages from source.
 | [09-troubleshooting.md](docs/09-troubleshooting.md) | Known failures and their fixes |
 | [10-reference.md](docs/10-reference.md) | Env vars, file layout, upstream sources |
 | [11-omarchy-learn.md](docs/11-omarchy-learn.md) | The built-in AI tutor: install, usage, memory |
+| [12-wayland-on-wsl2.md](docs/12-wayland-on-wsl2.md) | **Why Hyprland can't run on WSL2**, and what does |
 
 ---
 

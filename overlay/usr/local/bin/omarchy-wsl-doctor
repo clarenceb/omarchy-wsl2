@@ -94,9 +94,9 @@ else
   hmm "/dev/dxg missing - software rendering only"
 fi
 if compgen -G '/dev/dri/card*' >/dev/null; then
-  hmm "/dev/dri/card* exists (unexpected on WSL)"
+  hmm "/dev/dri/card* exists (unexpected on WSL - vkms loaded?)"
 else
-  ok "No /dev/dri/cardN - expected; this is why Hyprland must run nested, not on DRM"
+  ok "No /dev/dri/cardN - expected on WSL2; the desktop uses shm buffers, not DRM"
 fi
 if command -v glxinfo >/dev/null 2>&1; then
   # glxinfo blocks indefinitely when it cannot reach a display (no WSLg socket,
@@ -116,10 +116,14 @@ if command -v glxinfo >/dev/null 2>&1; then
 fi
 
 head_ "Omarchy"
-if command -v hyprland >/dev/null 2>&1 || command -v Hyprland >/dev/null 2>&1; then
-  ok "Hyprland installed ($( (Hyprland --version 2>/dev/null || hyprland --version 2>/dev/null) | head -1))"
+if command -v sway >/dev/null 2>&1; then
+  ok "sway installed ($(sway --version 2>/dev/null | head -1)) - this is the desktop compositor"
 else
-  hmm "Hyprland not installed - build with PROFILE=desktop for the full session"
+  hmm "sway not installed - build with PROFILE=desktop for the full session"
+fi
+if command -v Hyprland >/dev/null 2>&1 || command -v hyprland >/dev/null 2>&1; then
+  hmm "Hyprland present, but it cannot start on WSL2 (no DRM node for its GBM allocator)"
+  printf '      See docs/12-wayland-on-wsl2.md; use omarchy-wsl-desktop instead\n'
 fi
 for c in omarchy-theme-set waybar foot wayvnc; do
   command -v "$c" >/dev/null 2>&1 && ok "$c" || hmm "$c not installed"

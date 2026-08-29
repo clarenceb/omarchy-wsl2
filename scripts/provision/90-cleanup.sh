@@ -41,13 +41,21 @@ else
 fi
 
 info "Clearing the package cache"
-pacman -Scc --noconfirm >/dev/null 2>&1 || true
+# NOTE: do NOT use `pacman -Scc --noconfirm` here. With --noconfirm it answers
+# "yes" to the *second* prompt too ("remove unused repositories"), which wipes
+# /var/lib/pacman/sync. The image then greets the user with
+#     error: target not found / database file for 'core' does not exist
+# on their very first `pacman -S`. Clearing the package cache directly has the
+# same size benefit with none of that risk.
 rm -rf /var/cache/pacman/pkg/* 2>/dev/null || true
 
-# NOTE: /var/lib/pacman/sync is deliberately KEPT. Deleting it saves ~30MB but
-# makes the very first `pacman -S <pkg>` fail with "target not found" plus
-# "database file for 'core' does not exist", which reads like a broken image.
-# The databases are refreshed by any -Syu anyway.
+# /var/lib/pacman/sync is deliberately KEPT so the first `pacman -S <pkg>` in
+# a fresh install just works. Verify, and restore it if something removed it.
+if ! compgen -G '/var/lib/pacman/sync/*.db' >/dev/null; then
+  info "  sync databases are missing - refreshing them"
+  pacman -Sy >/dev/null 2>&1 \
+    || info "  WARNING: could not refresh sync databases; first pacman -S will need -Sy"
+fi
 
 info "Removing build staging and logs"
 # NOTE: /tmp/omarchy-wsl2-src is this script's own location, so it is removed

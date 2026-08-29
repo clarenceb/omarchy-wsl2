@@ -1,15 +1,25 @@
-# desktop.packages - Tier 3: the full Hyprland session (nested or VNC).
+# desktop.packages - Tier 3: a full Wayland desktop session (nested or VNC).
 #
-# Under WSL2 Hyprland CANNOT drive a real display: WSLg exposes /dev/dxg for
-# rendering but no /dev/dri/cardN with kernel mode-setting, so wlroots' DRM
-# backend aborts with `wlr_backend_get_drm_fd() failed!`.
+# WSL2 exposes NO DRM device - only /dev/dxg, via Direct3D12. There is no
+# /dev/dri/cardN and no render node.
 #
-# We therefore run Hyprland with its *Wayland* backend (nested inside WSLg) or
-# its *headless* backend behind wayvnc. See docs/03-modes.md.
+# Hyprland's backend (Aquamarine) always builds a GBM allocator from a DRM
+# node and fails without one, so it cannot start here at all. wlroots falls
+# back to a shm allocator that needs no DRM node, so the session we actually
+# ship is sway with WLR_RENDERER=pixman.
+#
+# See docs/12-wayland-on-wsl2.md for the full analysis.
 #
 # Enable with: make build PROFILE=desktop
 
-# --- compositor ---
+# --- compositor (this is the one that works) ---
+sway
+swayidle
+swaylock
+
+# --- Hyprland: installed for inspection/learning only; see the doc above.
+#     omarchy-wsl-desktop --compositor hyprland will attempt it and explain
+#     why it fails. Kept so Omarchy's own hypr* configs remain readable.
 hyprland
 hyprland-protocols
 xdg-desktop-portal-hyprland

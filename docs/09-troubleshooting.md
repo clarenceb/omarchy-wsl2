@@ -257,39 +257,51 @@ ls -l /mnt/wslg/PulseServer
 export PULSE_SERVER=/mnt/wslg/PulseServer
 ```
 
-### Hyprland: `wlr_backend_get_drm_fd() failed!`
+### Hyprland: `CBackend::create() failed!`
 
-You're trying to run the DRM backend. It cannot work under WSL2 — there's no
-KMS device. Use the helper:
+Hyprland **cannot run under WSL2 at all** — this is not a misconfiguration.
+Aquamarine requires a GBM allocator built from a DRM node, and WSL2 exposes
+only `/dev/dxg`. Nesting fails separately because WSLg does not advertise
+`zwp_linux_dmabuf_v1`.
+
+Use the desktop helper, which runs sway:
 
 ```bash
-omarchy-wsl-desktop          # nested
+omarchy-wsl-desktop          # nested in WSLg
 omarchy-wsl-desktop vnc      # headless + VNC
 ```
 
-Never run bare `Hyprland` on WSL.
+The full diagnosis, and how to reproduce each failure, is in
+[12-wayland-on-wsl2.md](12-wayland-on-wsl2.md).
 
-### Nested Hyprland starts then exits immediately
-
-Check the log:
-
-```bash
-tail -50 ~/.local/share/hyprland/hyprland.log
-```
-
-Then try software rendering:
+Note that the same message is thrown for two different internal failures, and
+stdout logging is switched off just before it appears. To see the real cause:
 
 ```bash
-omarchy-wsl-desktop --software
+printf '\ndebug {\n  disable_logs = false\n  enable_stdout_logs = true\n}\n' \
+  >> ~/.config/hypr/hyprland.conf
+AQ_TRACE=1 Hyprland
 ```
 
-Also confirm the WSL override file is being sourced:
+### The desktop starts then exits immediately
+
+Check that sway is what's running — `omarchy-wsl-desktop --compositor hyprland`
+will always fail:
 
 ```bash
-grep -n 'conf/wsl.conf' ~/.config/hypr/hyprland.conf
+omarchy-wsl-desktop 2>&1 | tail -30
 ```
 
-### Nested Hyprland ignores my `SUPER` keybindings
+For nested mode, confirm WSLg's socket is visible:
+
+```bash
+echo "$WAYLAND_DISPLAY"
+ls -l "$XDG_RUNTIME_DIR"/wayland-*
+```
+
+If `WAYLAND_DISPLAY` is empty, WSLg isn't running — use `vnc` mode instead.
+
+### The nested desktop ignores my `SUPER` keybindings
 
 Expected. WSLg's outer compositor claims some combinations first. Use VNC mode,
 which owns its own input:
@@ -298,23 +310,39 @@ which owns its own input:
 omarchy-wsl-desktop vnc
 ```
 
+### `error: target not found` on the first `pacman -S`
+
+Older images shipped without pacman's sync databases, because
+`pacman -Scc --noconfirm` also answers "yes" to *remove unused repositories*.
+Current builds keep them. On an affected image:
+
+```bash
+sudo pacman -Sy --needed <package>
+```
+
 ### VNC client can't connect
 
 ```bash
 ss -tlnp | grep 5900        # is wayvnc listening?
 ```
 
-If yes but Windows can't reach it, you're probably in mirrored networking mode.
-Either switch back in `.wslconfig`:
+`wayvnc` binds `127.0.0.1` by default, which WSL2 forwards from Windows. If
+the compositor never started, nothing is listening and Windows reports
+"actively refused" — scroll up for the sway error rather than debugging the
+network.
+
+If it *is* listening but Windows can't reach it, you're probably in mirrored
+networking mode. Either switch back in `.wslconfig`:
 
 ```ini
 [wsl2]
 networkingMode=NAT
 ```
 
-or connect to the distro's address:
+or bind to all interfaces and connect to the distro's address:
 
 ```bash
+omarchy-wsl-desktop vnc --bind 0.0.0.0
 hostname -I
 ```
 
