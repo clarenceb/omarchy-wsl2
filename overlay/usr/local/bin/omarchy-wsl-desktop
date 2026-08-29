@@ -54,6 +54,49 @@ export XDG_SESSION_TYPE=wayland
 export XDG_CURRENT_DESKTOP=Hyprland
 export XDG_SESSION_DESKTOP=Hyprland
 
+hypr_log() {
+  # Hyprland writes to $XDG_RUNTIME_DIR/hypr/<sig>/hyprland.log
+  find "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr" -name 'hyprland.log' \
+    -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-
+}
+
+explain_backend_failure() {
+  local log; log=$(hypr_log)
+  echo
+  echo "----------------------------------------------------------------"
+  echo "Hyprland could not create a backend."
+  echo
+
+  if [[ -n $log && -f $log ]]; then
+    echo "Relevant lines from $log:"
+    grep -iE 'aq|backend|dmabuf|drm|gbm|egl|error|fail' "$log" 2>/dev/null \
+      | tail -15 | sed 's/^/    /'
+    echo
+  fi
+
+  if [[ -n $log ]] && grep -qi 'dmabuf' "$log" 2>/dev/null; then
+    echo "Likely cause: WSLg's compositor only offers zwp_linux_dmabuf_v1"
+    echo "version 4, while Aquamarine asks for version 5."
+    echo "See https://github.com/hyprwm/Hyprland/issues/6947"
+    echo
+  fi
+
+  cat <<'MSG'
+Nested mode depends on WSLg's compositor exposing protocols that Hyprland's
+Wayland backend needs, and current WSLg often does not.
+
+Try instead:
+    omarchy-wsl-desktop vnc --size 1920x1080
+
+VNC mode uses Hyprland's headless backend, which does not depend on WSLg's
+protocol support, and gives a resizable full-screen desktop.
+
+For a full trace:
+    AQ_TRACE=1 omarchy-wsl-desktop
+MSG
+  echo "----------------------------------------------------------------"
+}
+
 case "$MODE" in
   nested)
     if [[ -z ${WAYLAND_DISPLAY:-} ]]; then
@@ -64,8 +107,15 @@ case "$MODE" in
     # WAYLAND_DISPLAY is set. WLR_BACKENDS is kept for older wlroots builds.
     export WLR_BACKENDS=wayland
     export AQ_WL_OUTPUTS="${AQ_WL_OUTPUTS:-1}"
+    # WSLg has no DRM render node, so never let Aquamarine hunt for one.
+    export AQ_DRM_DEVICES="${AQ_DRM_DEVICES:-}"
+
     echo "Starting nested Hyprland inside WSLg (host socket: $WAYLAND_DISPLAY)..."
-    exec "$HYPR"
+    if "$HYPR"; then
+      exit 0
+    fi
+    explain_backend_failure
+    exit 1
     ;;
 
   vnc)
@@ -74,6 +124,8 @@ case "$MODE" in
     export WLR_BACKENDS=headless
     export WLR_RENDERER="${WLR_RENDERER:-pixman}"
     export WLR_HEADLESS_OUTPUTS=1
+    # Aquamarine's own selector (Hyprland >= 0.45 uses Aquamarine, not wlroots).
+    export AQ_FORCE_BACKENDS="${AQ_FORCE_BACKENDS:-headless}"
     export AQ_HEADLESS_OUTPUTS=1
     # Detach from WSLg so Hyprland does not pick the Wayland backend instead.
     unset WAYLAND_DISPLAY
@@ -87,9 +139,15 @@ case "$MODE" in
     for _ in $(seq 1 40); do
       HYPR_SOCK=$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -name 'wayland-*' -type s 2>/dev/null | head -1)
       [[ -n ${HYPR_SOCK:-} ]] && break
+      kill -0 "$HYPR_PID" 2>/dev/null || break
       sleep 0.25
     done
-    [[ -z ${HYPR_SOCK:-} ]] && { echo "Hyprland did not start; see ~/.local/share/hyprland/hyprland.log" >&2; exit 1; }
+
+    if [[ -z ${HYPR_SOCK:-} ]]; then
+      echo "Hyprland did not start." >&2
+      explain_backend_failure
+      exit 1
+    fi
 
     WAYLAND_DISPLAY="$(basename "$HYPR_SOCK")"
     export WAYLAND_DISPLAY
