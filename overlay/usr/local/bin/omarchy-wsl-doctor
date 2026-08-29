@@ -99,7 +99,20 @@ else
   ok "No /dev/dri/cardN - expected; this is why Hyprland must run nested, not on DRM"
 fi
 if command -v glxinfo >/dev/null 2>&1; then
-  printf '    renderer: %s\n' "$(GALLIUM_DRIVER=${GALLIUM_DRIVER:-d3d12} glxinfo -B 2>/dev/null | awk -F': ' '/OpenGL renderer/{print $2}')"
+  # glxinfo blocks indefinitely when it cannot reach a display (no WSLg socket,
+  # or an unresponsive X/Wayland server), so never run it unbounded.
+  renderer=$(timeout 10 env GALLIUM_DRIVER="${GALLIUM_DRIVER:-d3d12}" \
+    glxinfo -B 2>/dev/null | awk -F': ' '/OpenGL renderer/{print $2}')
+  if [[ -n ${renderer:-} ]]; then
+    printf '    renderer: %s\n' "$renderer"
+    case "$renderer" in
+      *llvmpipe*|*softpipe*|*swrast*)
+        hmm "Software rendering - see docs/09-troubleshooting.md (libedit symlink)" ;;
+      *D3D12*|*d3d12*) ok "Hardware-accelerated via D3D12" ;;
+    esac
+  else
+    hmm "glxinfo returned nothing (timed out or no display)"
+  fi
 fi
 
 head_ "Omarchy"

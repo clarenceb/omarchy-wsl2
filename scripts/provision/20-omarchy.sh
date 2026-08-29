@@ -60,6 +60,22 @@ export PATH="\$OMARCHY_PATH/bin:\$PATH"
 EOF
 chmod 0644 /etc/profile.d/omarchy.sh
 
+# /etc/profile.d is only sourced by LOGIN shells, so `wsl -d omarchy -- cmd`
+# and any non-login shell would not find the omarchy-* commands. Add a symlink
+# farm in /usr/local/bin, which is always on PATH.
+info "Linking omarchy-* commands into /usr/local/bin"
+install -d -m 0755 /usr/local/bin
+linked=0
+for f in "$OMARCHY_SHARE"/bin/*; do
+  [[ -f $f && -x $f ]] || continue
+  name=$(basename "$f")
+  # Never shadow this project's own omarchy-wsl-* helpers.
+  [[ $name == omarchy-wsl-* ]] && continue
+  ln -sfn "$f" "/usr/local/bin/$name"
+  linked=$((linked + 1))
+done
+info "  linked $linked commands"
+
 printf 'OMARCHY_PATH=%s\nOMARCHY_VERSION=%s\n' "$OMARCHY_SHARE" "$OMARCHY_VERSION" \
   >/etc/omarchy.conf
 
