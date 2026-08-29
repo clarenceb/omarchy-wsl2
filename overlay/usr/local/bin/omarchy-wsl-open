@@ -1,0 +1,46 @@
+#!/bin/bash
+# omarchy-wsl-open - open a URL, file or directory with the Windows default app.
+#
+# This is a dependency-free stand-in for wslu's `wslview`. It matters most in
+# headless mode, where the distro has no browser at all and interactive logins
+# (gh auth login, copilot login, az login) need to reach one on Windows.
+#
+#   omarchy-wsl-open https://github.com/login/device
+#   omarchy-wsl-open report.pdf
+#   omarchy-wsl-open .
+#
+# It is wired up as $BROWSER and as an xdg-open fallback by
+# ~/.config/omarchy-wsl2/env.sh. If the real `wslview` is installed it is
+# preferred, since it handles more edge cases.
+
+set -uo pipefail
+
+target="${1:-}"
+[[ -z $target ]] && { echo "usage: omarchy-wsl-open <url|file|dir>" >&2; exit 1; }
+
+# Prefer wslu's wslview when present - it is more thorough than this shim.
+if command -v wslview >/dev/null 2>&1; then
+  exec wslview "$@"
+fi
+
+case "$target" in
+  http://*|https://*|mailto:*|ms-*:*)
+    # Hand URLs straight to the Windows shell.
+    if command -v powershell.exe >/dev/null 2>&1; then
+      exec powershell.exe -NoProfile -NonInteractive \
+        -Command "Start-Process '${target//\'/\'\'}'" >/dev/null 2>&1
+    fi
+    exec explorer.exe "$target" >/dev/null 2>&1
+    ;;
+esac
+
+# Local paths must be translated to Windows paths, and must be reachable from
+# Windows. Anything under the distro's own filesystem is served over \\wsl$.
+if [[ -e $target ]]; then
+  winpath=$(wslpath -w "$(readlink -f "$target")" 2>/dev/null) \
+    || { echo "omarchy-wsl-open: cannot translate '$target'" >&2; exit 1; }
+  exec explorer.exe "$winpath" >/dev/null 2>&1
+fi
+
+echo "omarchy-wsl-open: no such file, and not a URL: $target" >&2
+exit 1

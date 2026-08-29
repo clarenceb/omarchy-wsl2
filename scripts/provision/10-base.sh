@@ -28,19 +28,19 @@ fi
 info "Enabling useful system services"
 systemctl enable systemd-timesyncd.service >/dev/null 2>&1 || true
 
-# WSL manages networking itself - these units fight it and are known to break
-# WSL distros (per Microsoft's custom-distro guidance).
-info "Masking systemd units that misbehave under WSL"
+# WSL manages networking itself, and these units fight it.
+#
+# NOTE: Microsoft's custom-distro guidance also lists tmp.mount and the
+# systemd-tmpfiles-* units, but masking those breaks the per-user systemd
+# session on modern systemd:
+#   user@1000.service: Failed to spawn executor: Device or resource busy
+# systemd's executor needs a working /tmp, and /run/user/<uid> has to be set
+# up, so we deliberately leave them enabled.
+info "Masking systemd units that conflict with WSL networking"
 for unit in \
   systemd-resolved.service \
   systemd-networkd.service \
-  NetworkManager.service \
-  systemd-tmpfiles-setup.service \
-  systemd-tmpfiles-clean.service \
-  systemd-tmpfiles-clean.timer \
-  systemd-tmpfiles-setup-dev-early.service \
-  systemd-tmpfiles-setup-dev.service \
-  tmp.mount
+  NetworkManager.service
 do
   systemctl mask "$unit" >/dev/null 2>&1 || true
 done

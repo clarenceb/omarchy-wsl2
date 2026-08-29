@@ -40,6 +40,7 @@ Bundles:
   go        Go toolchain
   k8s       kubectl, helm, k9s
   learn     omarchy-learn AI tutor (Copilot CLI + glow)
+  wslu      wslview + Windows interop utilities (AUR)
   extras    httpie, yq, hyperfine, zellij, tokei, tealdeer
   all       everything above
 EOF
@@ -53,7 +54,7 @@ if (( EUID != 0 )); then
 fi
 
 BUNDLES=("$@")
-[[ ${BUNDLES[0]} == all ]] && BUNDLES=(gh copilot mise docker node python rust go k8s learn extras)
+[[ ${BUNDLES[0]} == all ]] && BUNDLES=(gh copilot mise docker node python rust go k8s learn wslu extras)
 
 for bundle in "${BUNDLES[@]}"; do
   case "$bundle" in
@@ -120,6 +121,26 @@ for bundle in "${BUNDLES[@]}"; do
     k8s)
       step "Kubernetes tooling"
       pac kubectl helm k9s
+      ;;
+
+  wslu|wslview)
+      step "wslu (Windows interop utilities)"
+      # AUR-only, but arch=(any) - pure shell, so it works on aarch64 too.
+      # Build with makepkg directly so no AUR helper is required.
+      pac bc psmisc git
+      if command -v wslview >/dev/null 2>&1; then
+        ok "wslu already installed"
+      elif command -v yay >/dev/null 2>&1; then
+        as_user 'yay -S --noconfirm wslu' >/dev/null 2>&1 \
+          && ok "wslu (yay)" || warn "yay install of wslu failed"
+      else
+        # makepkg refuses to run as root, so build as the target user.
+        as_user 'rm -rf /tmp/wslu-build && git clone -q --depth 1 \
+          https://aur.archlinux.org/wslu.git /tmp/wslu-build \
+          && cd /tmp/wslu-build && makepkg -si --noconfirm' >/dev/null 2>&1 \
+          && ok "wslu (makepkg)" || warn "wslu build failed - the built-in omarchy-wsl-open shim still works"
+        as_user 'rm -rf /tmp/wslu-build' >/dev/null 2>&1 || true
+      fi
       ;;
 
     extras)

@@ -404,6 +404,7 @@ ask_tools() {
   multiselect CFG_TOOLS "Which developer tools should be installed?" "$CFG_TOOLS" \
     "learn|omarchy-learn|AI tutor for Omarchy/WSL2 questions (Copilot CLI + glow)" \
     "gh|GitHub CLI|gh - auth, PRs, issues" \
+    "wslu|wslu / wslview|Open URLs+files in Windows apps (helps browser logins)" \
     "copilot|Copilot CLI|GitHub Copilot in the terminal" \
     "mise|mise|Runtime version manager (node, python, go, ruby)" \
     "docker|Docker|Native docker + compose inside the distro" \

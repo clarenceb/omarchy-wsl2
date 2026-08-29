@@ -47,14 +47,21 @@ if [[ -d $OMARCHY_SHARE/config ]]; then
   cp -RT "$OMARCHY_SHARE/config" "$USER_HOME/.config"
 fi
 
-# Omarchy's bashrc expects $OMARCHY_PATH; /etc/profile.d/omarchy.sh sets it.
+# Omarchy hardcodes ~/.local/share/omarchy - its upstream install location - in
+# roughly 29 files across bin/, config/ and default/. We vendor a single
+# system-wide copy at /usr/share/omarchy, so point the expected path at it
+# instead of trying to rewrite every reference (which is what an earlier sed
+# attempted, and missed, because the files use ~/ rather than $HOME/).
+info "Linking ~/.local/share/omarchy -> $OMARCHY_SHARE"
+for base in /etc/skel "$USER_HOME"; do
+  install -d -m 0755 "$base/.local/share"
+  ln -sfn "$OMARCHY_SHARE" "$base/.local/share/omarchy"
+done
+
 if [[ -f $OMARCHY_SHARE/default/bashrc ]]; then
   info "Installing Omarchy's bashrc"
   cp "$OMARCHY_SHARE/default/bashrc" /etc/skel/.bashrc
   cp "$OMARCHY_SHARE/default/bashrc" "$USER_HOME/.bashrc"
-  # Upstream hardcodes /usr/share/omarchy in places; keep it pointing at ours.
-  sed -i "s#\$HOME/.local/share/omarchy#$OMARCHY_SHARE#g" \
-    /etc/skel/.bashrc "$USER_HOME/.bashrc" 2>/dev/null || true
 fi
 
 # Chain in the WSL-specific bits.

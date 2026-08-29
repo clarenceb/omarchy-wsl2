@@ -82,15 +82,14 @@ On aarch64, install these via `npm -g` instead.
 
 ```bash
 sudo pacman -S github-cli
-gh auth login
+gh auth login          # opens your Windows browser via $BROWSER
 ```
 
 `gh auth login` opens a browser — with WSL interop enabled it launches your
 Windows browser automatically. If it doesn't:
 
 ```bash
-sudo pacman -S xdg-utils
-export BROWSER=wslview     # or just use the device-code flow
+sudo omarchy-wsl-devtools wslu     # or rely on the built-in omarchy-wsl-open
 ```
 
 ## Git
@@ -129,6 +128,31 @@ Generate inside the distro (fastest), or reuse your Windows keys:
 cp -r /mnt/c/Users/$USER/.ssh ~/.ssh
 chmod 700 ~/.ssh && chmod 600 ~/.ssh/id_*
 ```
+
+## Opening links and files on Windows
+
+In headless mode the distro has no browser, so interactive logins
+(`gh auth login`, `copilot login`, `az login`) have nowhere to send you.
+
+The image ships **`omarchy-wsl-open`**, a dependency-free shim that hands URLs
+and files to the Windows default application, and wires it up as `$BROWSER`:
+
+```bash
+omarchy-wsl-open https://github.com
+omarchy-wsl-open report.pdf
+omarchy-wsl-open .              # opens the current dir in File Explorer
+```
+
+For the fuller toolset — `wslview`, `wslvar`, `wslsys`, `wslusc` — install
+[wslu](https://github.com/wslutilities/wslu):
+
+```bash
+sudo omarchy-wsl-devtools wslu
+```
+
+`wslu` is AUR-only but `arch=(any)` (pure shell), so it installs on ARM64 too.
+When present, `omarchy-wsl-open` defers to `wslview`, which handles more edge
+cases. You do not need `wslpath` from wslu — WSL provides that natively.
 
 ## Runtime version management with mise
 

@@ -70,6 +70,15 @@ if [ -r /usr/local/bin/omarchy-wsl-env ]; then
     . /usr/local/bin/omarchy-wsl-env
     owsl_export_wslg_env 2>/dev/null || true
 fi
+
+# Send URLs to the Windows default browser. This is what makes interactive
+# logins (gh auth login, copilot login, az login) work in headless mode, where
+# the distro has no browser of its own.
+if command -v wslview >/dev/null 2>&1; then
+    export BROWSER=wslview
+elif [ -x /usr/local/bin/omarchy-wsl-open ]; then
+    export BROWSER=omarchy-wsl-open
+fi
 EOF
 done
 
