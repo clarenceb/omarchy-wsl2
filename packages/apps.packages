@@ -32,9 +32,30 @@ chromium
 
 # --- file manager & viewers ---
 nautilus
+nautilus-python
+sushi
 imv
 mpv
 evince
+
+# --- Omarchy's productivity apps (all verified available on aarch64) ---
+libreoffice-fresh
+signal-desktop
+xournalpp
+gnome-calculator
+satty
+
+# --- alternative terminal ---
+alacritty
+
+# --- audio control ---
+playerctl
+wiremix
+alsa-utils
+
+# --- filesystem access for the file manager ---
+gvfs-mtp
+gvfs-smb
 
 # --- media helpers ---
 ffmpegthumbnailer

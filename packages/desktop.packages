@@ -18,6 +18,14 @@ xdg-desktop-portal-hyprland
 hyprpicker
 hyprlang
 hyprutils
+hyprlock
+hypridle
+
+# --- on-screen display for volume/brightness keys ---
+swayosd
+
+# --- screenshot annotation (pairs with grim/slurp) ---
+satty
 
 # --- bar, launcher, notifications, wallpaper ---
 waybar
