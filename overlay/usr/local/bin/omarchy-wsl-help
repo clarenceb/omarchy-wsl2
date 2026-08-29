@@ -25,6 +25,11 @@ cat <<'EOF'
     omarchy-theme-list                   what is available
     ~/.config/omarchy/                   your overrides
 
+  PACKAGES
+    sudo pacman -Syu <pkg>         install (always -Syu, never bare -Sy)
+    omarchy-pkg-add <pkg>          Omarchy's wrapper for the same
+    pacman -Q                      list what's installed
+
   DIAGNOSTICS
     omarchy-wsl-doctor             check WSLg / GPU / systemd / Hyprland
 

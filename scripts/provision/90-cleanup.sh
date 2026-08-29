@@ -42,7 +42,12 @@ fi
 
 info "Clearing the package cache"
 pacman -Scc --noconfirm >/dev/null 2>&1 || true
-rm -rf /var/cache/pacman/pkg/* /var/lib/pacman/sync/* 2>/dev/null || true
+rm -rf /var/cache/pacman/pkg/* 2>/dev/null || true
+
+# NOTE: /var/lib/pacman/sync is deliberately KEPT. Deleting it saves ~30MB but
+# makes the very first `pacman -S <pkg>` fail with "target not found" plus
+# "database file for 'core' does not exist", which reads like a broken image.
+# The databases are refreshed by any -Syu anyway.
 
 info "Removing build staging and logs"
 # NOTE: /tmp/omarchy-wsl2-src is this script's own location, so it is removed

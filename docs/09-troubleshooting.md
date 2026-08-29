@@ -471,3 +471,20 @@ wsl --unregister omarchy-build
 ```
 
 then delete the stale directory and re-run `make seed`.
+
+### `error: target not found` on a freshly installed distro
+
+```
+warning: database file for 'core' does not exist (use '-Sy' to download)
+error: target not found: libreoffice-fresh
+```
+
+The image ships without pacman's sync databases (older builds cleared them to
+save space). Nothing is broken — just refresh while upgrading:
+
+```bash
+sudo pacman -Syu --needed <packages>
+```
+
+Use `-Syu`, never a bare `-Sy`: refreshing the databases without upgrading
+produces a partial upgrade, which is the classic way to break an Arch system.
