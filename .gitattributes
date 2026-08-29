@@ -1,0 +1,33 @@
+# Keep LF line endings everywhere. Without this, a checkout on Windows with
+# git's default core.autocrlf=true rewrites the shell scripts to CRLF, and bash
+# then fails with errors like:
+#     /usr/bin/env: 'bash\r': No such file or directory
+#     $'\r': command not found
+# The scripts run inside WSL/Linux regardless of where the repo is cloned.
+
+* text=auto eol=lf
+
+*.sh        text eol=lf
+*.bash      text eol=lf
+*.packages  text eol=lf
+*.conf      text eol=lf
+*.md        text eol=lf
+*.json      text eol=lf
+*.py        text eol=lf
+Makefile    text eol=lf
+
+# Executables without an extension.
+omarchy-wsl2        text eol=lf
+omarchy-learn       text eol=lf
+oobe.sh             text eol=lf
+
+# PowerShell is the one place CRLF is conventional on Windows.
+*.ps1       text eol=crlf
+
+# Binary assets - never touch these.
+*.png       binary
+*.ico       binary
+*.wsl       binary
+*.tar       binary
+*.gz        binary
+*.zst       binary
