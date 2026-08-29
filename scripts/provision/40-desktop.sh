@@ -118,12 +118,26 @@ input * {
 # Software cursors only - there are no DRM planes to put a hardware one on.
 seat * hide_cursor when-typing enable
 
+# WSLg already owns /tmp/.X11-unix and every display slot in it, so sway's
+# own Xwayland cannot claim one:
+#     xwayland/sockets.c: No display available in the first 33
+#     sway/server.c: Failed to start Xwayland
+# X11 apps should be run through WSLg instead (omarchy-wsl-app). Disabling
+# this removes a wall of startup errors and speeds up launch.
+xwayland disable
+
 # --- autostart ------------------------------------------------------------
-exec_always --no-startup-id waybar
+# -c/-s point waybar at the sway-native config; Omarchy's own config.jsonc is
+# left in place but is Hyprland-specific.
+exec_always --no-startup-id waybar -c ~/.config/waybar-sway/config.jsonc -s ~/.config/waybar-sway/style.css
 exec --no-startup-id mako
-# Omarchy keeps the active wallpaper at ~/.config/omarchy/current/background.
-# Fall back to a flat colour so a missing file never leaves a black desktop.
-exec --no-startup-id sh -c 'swaybg -m fill -i "$HOME/.config/omarchy/current/background" 2>/dev/null || swaybg -c "#13233A"'
+# Omarchy keeps the active wallpaper at ~/.config/omarchy/current/background,
+# which is a symlink that only exists once a theme has been applied. swaybg
+# does NOT exit non-zero on a missing image - it just logs "Could not find
+# config for output" and draws nothing - so test for the file first rather
+# than relying on shell ||.
+exec --no-startup-id sh -c 'bg="$HOME/.config/omarchy/current/background"; \
+  if [ -r "$bg" ]; then exec swaybg -m fill -i "$bg"; else exec swaybg -c "#13233A"; fi'
 
 # Per-user theme overrides, written by the Omarchy theme bridge.
 include ~/.config/sway/theme.conf
@@ -136,6 +150,109 @@ chmod 0644 /etc/skel/.config/sway/config
 : >/etc/skel/.config/sway/theme.conf
 : >/etc/skel/.config/sway/local.conf
 chmod 0644 /etc/skel/.config/sway/theme.conf /etc/skel/.config/sway/local.conf
+
+# ---------------------------------------------------------------- waybar ---
+# Omarchy's own waybar config uses hyprland/workspaces and hyprland/window,
+# which need HYPRLAND_INSTANCE_SIGNATURE and simply switch themselves off
+# under sway:
+#     module hyprland/workspaces: Disabling module ... (Is Hyprland running?)
+# Ship a sway-native config in a separate directory and point waybar at it
+# from the session, leaving Omarchy's file untouched for reference.
+info "Writing the sway waybar config"
+install -d -m 0755 /etc/skel/.config/waybar-sway
+cat >/etc/skel/.config/waybar-sway/config.jsonc <<'EOF'
+{
+  "layer": "top",
+  "position": "top",
+  "height": 26,
+  "spacing": 8,
+  "modules-left": ["sway/workspaces", "sway/mode"],
+  "modules-center": ["sway/window"],
+  "modules-right": ["pulseaudio", "cpu", "memory", "clock", "tray"],
+
+  "sway/workspaces": {
+    "disable-scroll": true,
+    "all-outputs": true,
+    "format": "{name}"
+  },
+  "sway/window": {
+    "max-length": 60,
+    "tooltip": false
+  },
+  "cpu":    { "format": "  {usage}%", "interval": 5 },
+  "memory": { "format": "  {}%",     "interval": 5 },
+  "clock":  {
+    "format": "  {:%a %d %b  %H:%M}",
+    "tooltip-format": "<tt>{calendar}</tt>"
+  },
+  "pulseaudio": {
+    "format": "{icon}  {volume}%",
+    "format-muted": "  muted",
+    "format-icons": { "default": ["", "", ""] },
+    "on-click": "pamixer -t"
+  },
+  "tray": { "spacing": 8 }
+}
+EOF
+
+# A self-contained stylesheet. Omarchy's own style.css targets its
+# Hyprland-specific module IDs, and @import-ing a file that may not exist
+# leaves waybar unstyled, so keep this standalone.
+cat >/etc/skel/.config/waybar-sway/style.css <<'EOF'
+* {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 12px;
+  border: none;
+  border-radius: 0;
+  min-height: 0;
+}
+
+window#waybar {
+  background: rgba(19, 35, 58, 0.92);
+  color: #e6edf3;
+}
+
+#workspaces button {
+  padding: 0 8px;
+  color: #8b98a5;
+  background: transparent;
+}
+
+#workspaces button.focused,
+#workspaces button.visible {
+  color: #e6edf3;
+  box-shadow: inset 0 -2px #2aa6c4;
+}
+
+#workspaces button.urgent {
+  color: #c0392b;
+}
+
+#mode {
+  padding: 0 8px;
+  color: #ffd479;
+}
+
+#window {
+  color: #b6c2cf;
+}
+
+#cpu, #memory, #clock, #pulseaudio, #tray {
+  padding: 0 8px;
+}
+
+#clock {
+  color: #e6edf3;
+  font-weight: bold;
+}
+
+#pulseaudio.muted {
+  color: #8b98a5;
+}
+EOF
+
+chmod 0644 /etc/skel/.config/waybar-sway/config.jsonc \
+           /etc/skel/.config/waybar-sway/style.css
 
 # ------------------------------------------------------------- hyprland ---
 # Kept so Omarchy's own hypr* configs stay readable and diffable, and so the
