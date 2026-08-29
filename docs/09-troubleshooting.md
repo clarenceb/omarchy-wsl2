@@ -437,3 +437,37 @@ then from Windows:
 ```powershell
 wsl --shutdown
 ```
+
+### The build fails with `Error 126` or `Could not read the WSL version`
+
+`126` means "cannot execute binary file". If `wsl.exe` itself returns it, the
+`WSLInterop` binfmt handler has been unregistered — see the interop section
+above. Confirm with:
+
+```bash
+ls /proc/sys/fs/binfmt_misc/     # WSLInterop missing?
+wsl.exe --version; echo $?       # 126?
+```
+
+Fix with `wsl --shutdown` from Windows, then re-run. Builds after this was
+found detect the condition and explain it instead of failing with a bare code.
+
+### `ERROR_FILE_EXISTS` / "The supplied install location is already in use"
+
+Seen when building under a second `NAME` while an older build distro still
+holds the build directory:
+
+```
+The supplied install location is already in use.
+Error code: Wsl/Service/RegisterDistro/ERROR_FILE_EXISTS
+```
+
+Each build distro now gets `build/<name>-build/`, so this should not recur.
+To clear it manually:
+
+```powershell
+wsl --list -v                  # find any leftover *-build distro
+wsl --unregister omarchy-build
+```
+
+then delete the stale directory and re-run `make seed`.

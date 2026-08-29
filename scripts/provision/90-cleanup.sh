@@ -21,6 +21,25 @@ if [[ -d /etc/pacman.d/hooks ]]; then
   rmdir /etc/pacman.d/hooks 2>/dev/null || true
 fi
 
+# Re-assert the systemd-binfmt mask. Stage 10 masks it, but package upgrades
+# during the build can reinstall the unit file. Its
+#     ExecStop=/usr/lib/systemd/systemd-binfmt --unregister
+# flushes every binfmt_misc entry - including WSL's WSLInterop handler, which
+# is shared across the whole WSL VM. Without this, merely stopping this distro
+# breaks .exe execution in EVERY other distro until `wsl --shutdown`.
+info "Verifying systemd-binfmt.service is masked"
+systemctl mask systemd-binfmt.service >/dev/null 2>&1 || true
+if [[ -L /etc/systemd/system/systemd-binfmt.service ]] \
+   && [[ $(readlink /etc/systemd/system/systemd-binfmt.service) == /dev/null ]]; then
+  info "  masked"
+else
+  # Fall back to a drop-in that neutralises just the destructive ExecStop.
+  install -d -m 0755 /etc/systemd/system/systemd-binfmt.service.d
+  printf '[Service]\nExecStop=\n' \
+    >/etc/systemd/system/systemd-binfmt.service.d/10-omarchy-wsl-no-unregister.conf
+  info "  mask failed; neutralised ExecStop via drop-in instead"
+fi
+
 info "Clearing the package cache"
 pacman -Scc --noconfirm >/dev/null 2>&1 || true
 rm -rf /var/cache/pacman/pkg/* /var/lib/pacman/sync/* 2>/dev/null || true
