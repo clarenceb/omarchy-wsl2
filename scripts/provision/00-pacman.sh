@@ -21,6 +21,33 @@ else
   sed -i '/^\[options\]/a ParallelDownloads = 8' /etc/pacman.conf
 fi
 
+# 4) Neutralise pacman hooks that need a running init, udev, sshd or kernel.
+#    During the image build PID 1 is WSL's own init (/etc/wsl.conf enabling
+#    systemd is not installed until stage 60), so `systemctl daemon-reload` and
+#    `udevadm control --reload` fail and pacman reports
+#      error: command failed to execute correctly
+#    The packages themselves install fine; only the "tell the running system to
+#    reload" step fails. Symlinking a hook to /dev/null in /etc/pacman.d/hooks
+#    is the documented way to override one. 90-cleanup.sh removes these again so
+#    the shipped image keeps normal hook behaviour.
+info "Disabling runtime-only pacman hooks for the build"
+install -d -m 0755 /etc/pacman.d/hooks
+for hook in \
+  30-systemd-daemon-reload-system.hook \
+  30-systemd-daemon-reload-user.hook \
+  35-systemd-udev-reload.hook \
+  35-systemd-update.hook \
+  35-systemd-enqueue-marked.hook \
+  25-systemd-binfmt.hook \
+  60-depmod.hook \
+  60-mkinitcpio-remove.hook \
+  90-mkinitcpio-install.hook \
+  10-openssh-mark-sshd-for-restart.hook \
+  70-openssh-restart-sshd.hook
+do
+  ln -sf /dev/null "/etc/pacman.d/hooks/$hook"
+done
+
 case "$TARGET_ARCH" in
   x86_64)
     info "Seeding Arch mirrorlist"

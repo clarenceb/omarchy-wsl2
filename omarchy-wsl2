@@ -177,7 +177,17 @@ version_ge() { # version_ge A B  -> true if A >= B
   printf '%s\n%s\n' "$2" "$1" | sort -V -C
 }
 
-image_path() { echo "/mnt/c/wsl/omarchy-wsl2/dist/${CFG_NAME}-${CFG_PROFILE}-$(host_arch).wsl"; }
+# Artefact locations. These MUST match the Makefile's defaults; override both
+# by exporting WIN_ROOT before running the wizard.
+WIN_ROOT="${WIN_ROOT:-/mnt/c/wsl/omarchy-wsl2}"
+BUILD_DIR="$WIN_ROOT/build"
+DIST_DIR="$WIN_ROOT/dist"
+
+# The throwaway distro `make seed` creates; mirrors the Makefile's
+# BUILD_DISTRO = $(NAME)-build.
+build_distro() { echo "${CFG_NAME}-build"; }
+
+image_path() { echo "$DIST_DIR/${CFG_NAME}-${CFG_PROFILE}-$(host_arch).wsl"; }
 
 # ------------------------------------------------------------- prerequisites ---
 PREREQ_FAIL=0
@@ -356,6 +366,13 @@ show_status() {
   else
     note "No built image for profile '$CFG_PROFILE' yet"
   fi
+
+  # Surface the scratch distro so its disk cost is never a surprise.
+  local bd; bd=$(build_distro)
+  if distro_exists "$bd"; then
+    local bsize; bsize=$(du -sh "$BUILD_DIR" 2>/dev/null | cut -f1)
+    warn "Scratch distro '$bd' still registered${bsize:+ (${bsize})} - 'make clean' to remove"
+  fi
 }
 
 # --------------------------------------------------------------- questions ---
@@ -458,23 +475,97 @@ do_build_install() {
   printf '  %-20s %s\n' "Architecture:" "$(host_arch)"
   printf '  %-20s %s\n' "Output:"       "$(image_path)"
   printf '\n'
-  note "This downloads a base image and installs packages - expect 30-60 minutes."
 
-  if distro_exists "$CFG_NAME"; then
-    warn "A distro named '$CFG_NAME' already exists and will be REPLACED."
+  # `make fetch` reuses the cached rootfs, but seed/build/export always re-run.
+  # If the exact image already exists, offer to skip straight to installing it.
+  local reuse=0
+  local existing; existing=$(image_path)
+  if [[ -s $existing ]]; then
+    ok "An image for '$CFG_PROFILE' already exists:"
+    note "  $(basename "$existing")  ($(du -h "$existing" | cut -f1), built $(date -r "$existing" '+%Y-%m-%d %H:%M'))"
+    printf '\n'
+    local ichoice
+    choose ichoice "Rebuild it, or install the existing one?" 2 \
+      "rebuild|Rebuild|Build again from scratch (30-60 min)" \
+      "reuse|Use existing|Skip the build and install this image (fast)"
+    [[ $ichoice == reuse ]] && reuse=1
+    printf '\n'
   fi
-  confirm "Start the build?" || { note "Cancelled."; return 0; }
+
+  if (( reuse )); then
+    note "Skipping the build - installing the existing image."
+  else
+    note "This downloads a base image and installs packages - expect 30-60 minutes."
+  fi
+
+  # Installing replaces the distro of this name outright - `make install` runs
+  # `wsl --unregister` first. That destroys everything inside it, so make the
+  # user opt in explicitly rather than letting a stray Enter do it.
+  if distro_exists "$CFG_NAME"; then
+    printf '\n'
+    bad "A distro named '$CFG_NAME' already EXISTS."
+    warn "Installing will UNREGISTER it - all files, packages and settings"
+    warn "inside that distro are permanently destroyed."
+    printf '\n'
+    note "Distros are named by NAME only, not by profile, so a '$CFG_PROFILE'"
+    note "build cannot live alongside an existing '$CFG_NAME'."
+    printf '\n'
+    local alt="${CFG_NAME}-${CFG_PROFILE}"
+    note "Tip: use a different name (e.g. '$alt') to keep both."
+    printf '\n'
+
+    local choice
+    choose choice "How should we proceed?" 1 \
+      "rename|Use a new name|Install as '$alt' and keep the existing distro" \
+      "replace|Replace it|DESTROY '$CFG_NAME' and install over it" \
+      "cancel|Cancel|Go back without building"
+
+    case "$choice" in
+      rename)
+        CFG_NAME="$alt"
+        save_conf
+        ok "Will install as '$CFG_NAME'"
+        # The image filename embeds the distro name, so a rename invalidates
+        # any earlier "reuse the existing image" decision.
+        if (( reuse )) && [[ ! -s $(image_path) ]]; then
+          reuse=0
+          note "No image exists for '$CFG_NAME' yet - a build is required."
+        fi
+        ;;
+      replace)
+        printf '\n'
+        printf "  Type the distro name %s'%s'%s to confirm deletion: " "$B" "$CFG_NAME" "$R"
+        local typed; read -r typed
+        [[ $typed == "$CFG_NAME" ]] || { note "Names did not match. Cancelled."; return 0; }
+        warn "'$CFG_NAME' will be replaced."
+        ;;
+      *)
+        note "Cancelled."; return 0 ;;
+    esac
+    printf '\n'
+    printf '  %-20s %s\n' "Output:" "$(image_path)"
+    printf '\n'
+  fi
+
+  local prompt="Start the build?"
+  (( reuse )) && prompt="Install the existing image?"
+  confirm "$prompt" || { note "Cancelled."; return 0; }
 
   check_prereqs no || { bad "Fix the prerequisites first (menu option 1)."; return 1; }
 
   local -a mkargs=(PROFILE="$CFG_PROFILE" NAME="$CFG_NAME"
                    OMARCHY_THEME="$CFG_THEME" OMARCHY_REF="$CFG_REF")
 
-  run_make logo   "${mkargs[@]}" || { bad "Logo generation failed"; return 1; }
-  run_make fetch  "${mkargs[@]}" || { bad "Fetch failed"; return 1; }
-  run_make seed   "${mkargs[@]}" || { bad "Seed failed"; return 1; }
-  run_make build  "${mkargs[@]}" || { bad "Build failed"; return 1; }
-  run_make export "${mkargs[@]}" || { bad "Export failed"; return 1; }
+  if (( reuse )); then
+    note "Reusing $(basename "$(image_path)")"
+  else
+    run_make logo   "${mkargs[@]}" || { bad "Logo generation failed"; return 1; }
+    run_make fetch  "${mkargs[@]}" || { bad "Fetch failed"; return 1; }
+    run_make seed   "${mkargs[@]}" || { bad "Seed failed"; return 1; }
+    run_make build  "${mkargs[@]}" || { bad "Build failed"; return 1; }
+    run_make export "${mkargs[@]}" || { bad "Export failed"; return 1; }
+  fi
+
   run_make install "${mkargs[@]}" || { bad "Install failed"; return 1; }
 
   [[ -n $CFG_TOOLS ]] && install_tools
@@ -492,6 +583,31 @@ do_build_install() {
     do_terminal
   else
     note "You can do this later: ./omarchy-wsl2 -> 'Windows Terminal'"
+  fi
+
+  offer_build_cleanup
+}
+
+# The build distro is pure scaffolding. `make seed` recreates it from the
+# cached rootfs on every build, so keeping it does NOT speed up rebuilds - its
+# only real use is inspecting a FAILED build with `make shell`.
+offer_build_cleanup() {
+  local bd; bd=$(build_distro)
+  distro_exists "$bd" || return 0
+
+  local size
+  size=$(du -sh "$BUILD_DIR" 2>/dev/null | cut -f1)
+
+  title "Clean up"
+  note "The scratch distro '$bd' is still registered${size:+ (${size})}."
+  note "It is only needed to debug a failed build - your image is already built."
+  printf '\n'
+  if confirm "Remove the build distro and reclaim that space?"; then
+    run_make clean NAME="$CFG_NAME"
+    ok "Reclaimed${size:+ ${size}}"
+    note "The download cache is kept so future builds skip the 791MB download."
+  else
+    note "Kept. Remove it later with: make clean"
   fi
 }
 

@@ -13,6 +13,14 @@ info "Restoring pacman's normal security posture"
 sed -i 's/^#\(DownloadUser\)/\1/' /etc/pacman.conf || true
 sed -i '/^DisableSandbox$/d' /etc/pacman.conf || true
 
+info "Re-enabling the pacman hooks disabled during the build"
+# The installed image runs systemd for real, so these hooks must work again.
+# Only remove OUR /dev/null overrides; leave any genuine user hooks alone.
+if [[ -d /etc/pacman.d/hooks ]]; then
+  find /etc/pacman.d/hooks -maxdepth 1 -type l -lname /dev/null -delete 2>/dev/null || true
+  rmdir /etc/pacman.d/hooks 2>/dev/null || true
+fi
+
 info "Clearing the package cache"
 pacman -Scc --noconfirm >/dev/null 2>&1 || true
 rm -rf /var/cache/pacman/pkg/* /var/lib/pacman/sync/* 2>/dev/null || true
