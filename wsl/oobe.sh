@@ -17,6 +17,7 @@ DEFAULT_UID=$(sed -n 's/^defaultUid[[:space:]]*=[[:space:]]*\([0-9]\+\).*/\1/p' 
 DEFAULT_UID=${DEFAULT_UID:-1000}
 DEFAULT_GROUPS='wheel'
 STATE_DIR=/var/lib/omarchy-wsl2
+OOBE_RENAMED=""
 
 cyan() { printf '\033[36m%s\033[0m\n' "$1"; }
 warn() { printf '\033[33m%s\033[0m\n' "$1"; }
@@ -123,6 +124,7 @@ main() {
       if [[ ${keep,,} == n* ]]; then
         if rename_user "$name"; then
           name=$(getent passwd "$DEFAULT_UID" | cut -d: -f1)
+          OOBE_RENAMED=1
         else
           warn "Keeping '${name}'."
         fi
@@ -146,6 +148,16 @@ main() {
 
   sync_default_user
   mkdir -p "$STATE_DIR" && date -Is >"$STATE_DIR/oobe-completed"
+
+  # A rename only takes full effect once WSL re-reads /etc/wsl.conf. Until the
+  # distro is restarted, WSL keeps resolving the OLD name and commands fail
+  # with: CreateProcessParseCommon: getpwnam(<old>) failed
+  if [[ -n ${OOBE_RENAMED:-} ]]; then
+    echo
+    warn "Restart the distro to finish the rename:"
+    warn "    wsl.exe --terminate \"\$WSL_DISTRO_NAME\""
+    echo
+  fi
 
   echo
   cyan 'Omarchy is ready.'
