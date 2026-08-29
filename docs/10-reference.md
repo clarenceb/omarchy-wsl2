@@ -26,6 +26,7 @@ omarchy-wsl2/
 │   │   ├── omarchy-wsl-app      run one GUI app via WSLg
 │   │   ├── omarchy-wsl-desktop  nested / VNC Hyprland
 │   │   ├── omarchy-wsl-devtools developer tool bundles
+│   │   ├── omarchy-wsl-wt       Windows Terminal profile configurator
 │   │   └── omarchy-wsl-help     cheat sheet
 │   └── opt/omarchy-learn/
 │       ├── bin/omarchy-learn    the AI tutor (symlinked as 'oml')

@@ -1,0 +1,553 @@
+#!/usr/bin/env python3
+"""omarchy-wsl-wt - configure the Windows Terminal profile for Omarchy.
+
+WSL auto-creates a Terminal profile from /usr/lib/wsl/terminal-profile.json when
+the distro is installed, but it is minimal. This tool makes that profile look
+like Omarchy: matching colour scheme, Nerd Font, transparency, padding and the
+project icon.
+
+Useful in every mode - headless, WSLg apps and the full desktop - because
+Windows Terminal is how you launch all of them.
+
+    omarchy-wsl-wt --detect
+    omarchy-wsl-wt --theme "Tokyo Night" --opacity 90
+    omarchy-wsl-wt --set-default
+    omarchy-wsl-wt --restore
+
+Run it from inside the Omarchy distro, or from any WSL2 distro with the repo
+checked out.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+# --------------------------------------------------------------------- ui ---
+def _color_ok() -> bool:
+    return sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+
+
+def _c(code: str, s: str) -> str:
+    return f"\033[{code}m{s}\033[0m" if _color_ok() else s
+
+def ok(m):   print("  " + _c("32", "✔") + f" {m}")
+def bad(m):  print("  " + _c("31", "✘") + f" {m}", file=sys.stderr)
+def warn(m): print("  " + _c("33", "!") + f" {m}")
+def note(m): print("  " + _c("90", m))
+def head(m): print("\n" + _c("1;36", m))
+
+
+# ---------------------------------------------------------------- schemes ---
+# Windows Terminal colour schemes matched to Omarchy's bundled themes.
+SCHEMES = {
+    "tokyo-night": {
+        "name": "Omarchy Tokyo Night",
+        "background": "#1A1B26", "foreground": "#A9B1D6",
+        "cursorColor": "#C0CAF5", "selectionBackground": "#33467C",
+        "black": "#15161E", "red": "#F7768E", "green": "#9ECE6A", "yellow": "#E0AF68",
+        "blue": "#7AA2F7", "purple": "#BB9AF7", "cyan": "#7DCFFF", "white": "#A9B1D6",
+        "brightBlack": "#414868", "brightRed": "#F7768E", "brightGreen": "#9ECE6A",
+        "brightYellow": "#E0AF68", "brightBlue": "#7AA2F7", "brightPurple": "#BB9AF7",
+        "brightCyan": "#7DCFFF", "brightWhite": "#C0CAF5",
+    },
+    "catppuccin": {
+        "name": "Omarchy Catppuccin",
+        "background": "#1E1E2E", "foreground": "#CDD6F4",
+        "cursorColor": "#F5E0DC", "selectionBackground": "#585B70",
+        "black": "#45475A", "red": "#F38BA8", "green": "#A6E3A1", "yellow": "#F9E2AF",
+        "blue": "#89B4FA", "purple": "#F5C2E7", "cyan": "#94E2D5", "white": "#BAC2DE",
+        "brightBlack": "#585B70", "brightRed": "#F38BA8", "brightGreen": "#A6E3A1",
+        "brightYellow": "#F9E2AF", "brightBlue": "#89B4FA", "brightPurple": "#F5C2E7",
+        "brightCyan": "#94E2D5", "brightWhite": "#A6ADC8",
+    },
+    "gruvbox": {
+        "name": "Omarchy Gruvbox",
+        "background": "#282828", "foreground": "#EBDBB2",
+        "cursorColor": "#EBDBB2", "selectionBackground": "#504945",
+        "black": "#282828", "red": "#CC241D", "green": "#98971A", "yellow": "#D79921",
+        "blue": "#458588", "purple": "#B16286", "cyan": "#689D6A", "white": "#A89984",
+        "brightBlack": "#928374", "brightRed": "#FB4934", "brightGreen": "#B8BB26",
+        "brightYellow": "#FABD2F", "brightBlue": "#83A598", "brightPurple": "#D3869B",
+        "brightCyan": "#8EC07C", "brightWhite": "#EBDBB2",
+    },
+    "everforest": {
+        "name": "Omarchy Everforest",
+        "background": "#2D353B", "foreground": "#D3C6AA",
+        "cursorColor": "#D3C6AA", "selectionBackground": "#475258",
+        "black": "#343F44", "red": "#E67E80", "green": "#A7C080", "yellow": "#DBBC7F",
+        "blue": "#7FBBB3", "purple": "#D699B6", "cyan": "#83C092", "white": "#D3C6AA",
+        "brightBlack": "#475258", "brightRed": "#E67E80", "brightGreen": "#A7C080",
+        "brightYellow": "#DBBC7F", "brightBlue": "#7FBBB3", "brightPurple": "#D699B6",
+        "brightCyan": "#83C092", "brightWhite": "#D3C6AA",
+    },
+    "kanagawa": {
+        "name": "Omarchy Kanagawa",
+        "background": "#1F1F28", "foreground": "#DCD7BA",
+        "cursorColor": "#C8C093", "selectionBackground": "#2D4F67",
+        "black": "#16161D", "red": "#C34043", "green": "#76946A", "yellow": "#C0A36E",
+        "blue": "#7E9CD8", "purple": "#957FB8", "cyan": "#6A9589", "white": "#C8C093",
+        "brightBlack": "#727169", "brightRed": "#E82424", "brightGreen": "#98BB6C",
+        "brightYellow": "#E6C384", "brightBlue": "#7FB4CA", "brightPurple": "#938AA9",
+        "brightCyan": "#7AA89F", "brightWhite": "#DCD7BA",
+    },
+    "nord": {
+        "name": "Omarchy Nord",
+        "background": "#2E3440", "foreground": "#D8DEE9",
+        "cursorColor": "#D8DEE9", "selectionBackground": "#434C5E",
+        "black": "#3B4252", "red": "#BF616A", "green": "#A3BE8C", "yellow": "#EBCB8B",
+        "blue": "#81A1C1", "purple": "#B48EAD", "cyan": "#88C0D0", "white": "#E5E9F0",
+        "brightBlack": "#4C566A", "brightRed": "#BF616A", "brightGreen": "#A3BE8C",
+        "brightYellow": "#EBCB8B", "brightBlue": "#81A1C1", "brightPurple": "#B48EAD",
+        "brightCyan": "#8FBCBB", "brightWhite": "#ECEFF4",
+    },
+    "rose-pine": {
+        "name": "Omarchy Rose Pine",
+        "background": "#191724", "foreground": "#E0DEF4",
+        "cursorColor": "#E0DEF4", "selectionBackground": "#403D52",
+        "black": "#26233A", "red": "#EB6F92", "green": "#31748F", "yellow": "#F6C177",
+        "blue": "#9CCFD8", "purple": "#C4A7E7", "cyan": "#EBBCBA", "white": "#E0DEF4",
+        "brightBlack": "#6E6A86", "brightRed": "#EB6F92", "brightGreen": "#31748F",
+        "brightYellow": "#F6C177", "brightBlue": "#9CCFD8", "brightPurple": "#C4A7E7",
+        "brightCyan": "#EBBCBA", "brightWhite": "#E0DEF4",
+    },
+    "matte-black": {
+        "name": "Omarchy Matte Black",
+        "background": "#121212", "foreground": "#BEBEBE",
+        "cursorColor": "#EAEAEA", "selectionBackground": "#333333",
+        "black": "#333333", "red": "#D35F5F", "green": "#8A9A7B", "yellow": "#FFC107",
+        "blue": "#8BA4B0", "purple": "#A98BB0", "cyan": "#8AA6A0", "white": "#BEBEBE",
+        "brightBlack": "#8A8A8D", "brightRed": "#E06C6C", "brightGreen": "#A3B58F",
+        "brightYellow": "#FFD54F", "brightBlue": "#A8C0CC", "brightPurple": "#C0A3C8",
+        "brightCyan": "#A3C0B8", "brightWhite": "#EAEAEA",
+    },
+    "osaka-jade": {
+        "name": "Omarchy Osaka Jade",
+        "background": "#111C18", "foreground": "#C1C9C4",
+        "cursorColor": "#6BC5A0", "selectionBackground": "#2A3F36",
+        "black": "#1A2620", "red": "#E06C75", "green": "#6BC5A0", "yellow": "#D3B67A",
+        "blue": "#6FA8B5", "purple": "#A98BB0", "cyan": "#7FC8B4", "white": "#C1C9C4",
+        "brightBlack": "#3A4F45", "brightRed": "#EB7A83", "brightGreen": "#7FD9B4",
+        "brightYellow": "#E3C68A", "brightBlue": "#84BFCC", "brightPurple": "#C0A3C8",
+        "brightCyan": "#95DCC8", "brightWhite": "#E0E6E2",
+    },
+}
+DEFAULT_THEME = "tokyo-night"
+
+
+def slug(name: str) -> str:
+    return name.strip().lower().replace(" ", "-")
+
+
+# ------------------------------------------------------------- discovery ---
+def windows_env(var: str) -> str | None:
+    try:
+        out = subprocess.run(["cmd.exe", "/c", f"echo %{var}%"],
+                             capture_output=True, text=True, timeout=20,
+                             cwd="/mnt/c")
+        v = out.stdout.strip().replace("\r", "")
+        return v if v and not v.startswith("%") else None
+    except Exception:
+        return None
+
+
+def to_wsl_path(win: str) -> Path | None:
+    try:
+        out = subprocess.run(["wslpath", "-u", win], capture_output=True,
+                             text=True, timeout=15)
+        p = out.stdout.strip()
+        return Path(p) if p else None
+    except Exception:
+        return None
+
+
+def find_settings() -> Path | None:
+    """Locate Windows Terminal settings.json across its install flavours."""
+    local = windows_env("LOCALAPPDATA")
+    roots: list[Path] = []
+    if local:
+        lp = to_wsl_path(local)
+        if lp:
+            roots += [
+                lp / "Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json",
+                lp / "Packages/Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe/LocalState/settings.json",
+                lp / "Microsoft/Windows Terminal/settings.json",
+            ]
+    # Fall back to scanning /mnt/c/Users when cmd.exe interop is unavailable.
+    for user in Path("/mnt/c/Users").glob("*"):
+        base = user / "AppData/Local"
+        roots += [
+            base / "Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json",
+            base / "Packages/Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe/LocalState/settings.json",
+            base / "Microsoft/Windows Terminal/settings.json",
+        ]
+    for r in roots:
+        try:
+            if r.is_file():
+                return r
+        except OSError:
+            continue
+    return None
+
+
+def load_settings(path: Path) -> dict:
+    raw = path.read_text(encoding="utf-8-sig")
+    # Windows Terminal permits // and /* */ comments in settings.json.
+    raw = re.sub(r"/\*.*?\*/", "", raw, flags=re.S)
+    raw = re.sub(r"^\s*//.*$", "", raw, flags=re.M)
+    return json.loads(raw)
+
+
+def profiles_list(d: dict) -> list:
+    return d.setdefault("profiles", {}).setdefault("list", [])
+
+
+def find_profile(d: dict, distro: str) -> dict | None:
+    want = distro.lower()
+    for p in profiles_list(d):
+        if p.get("name", "").lower() == want:
+            return p
+    for p in profiles_list(d):
+        cl = str(p.get("commandLine", "")).lower()
+        if f"-d {want}" in cl or f"--distribution {want}" in cl:
+            return p
+    return None
+
+
+def detect_distro_name() -> str:
+    """Best guess at the distro name this is being run for."""
+    if os.environ.get("WSL_DISTRO_NAME"):
+        return os.environ["WSL_DISTRO_NAME"]
+    return "omarchy"
+
+
+def inherit_from(d: dict, name: str) -> dict:
+    """Read presentation settings from an existing profile to use as defaults.
+
+    Lets us offer 'the same look as your existing Ubuntu profile' rather than
+    imposing our own opinions.
+    """
+    src = find_profile(d, name)
+    if not src:
+        return {}
+    font = src.get("font") or {}
+    out = {
+        "font_face": font.get("face") or src.get("fontFace"),
+        "font_size": font.get("size") or src.get("fontSize"),
+        "opacity": src.get("opacity"),
+        "acrylic": src.get("useAcrylic"),
+        "padding": src.get("padding"),
+        "cursor": src.get("cursorShape"),
+        "scheme": src.get("colorScheme"),
+        "intense": src.get("intenseTextStyle"),
+    }
+    return {k: v for k, v in out.items() if v is not None}
+
+
+# ------------------------------------------------------------- prompting ---
+def _ask(prompt: str, default):
+    shown = "yes" if default is True else "no" if default is False else str(default)
+    try:
+        reply = input(f"  {prompt} [{_c('90', shown)}]: ").strip()
+    except EOFError:
+        print()
+        return default
+    return default if reply == "" else reply
+
+
+def ask_bool(prompt: str, default: bool) -> bool:
+    r = _ask(prompt + " (yes/no)", default)
+    if isinstance(r, bool):
+        return r
+    return str(r).strip().lower().startswith("y")
+
+
+def ask_int(prompt: str, default: int) -> int:
+    r = _ask(prompt, default)
+    try:
+        return int(str(r))
+    except ValueError:
+        warn(f"Not a number; keeping {default}")
+        return default
+
+
+def ask_float(prompt: str, default: float) -> float:
+    r = _ask(prompt, default)
+    try:
+        return float(str(r))
+    except ValueError:
+        warn(f"Not a number; keeping {default}")
+        return default
+
+
+def ask_str(prompt: str, default: str) -> str:
+    return str(_ask(prompt, default))
+
+
+def ask_choice(prompt: str, options: list[str], default: str) -> str:
+    print()
+    for i, o in enumerate(options, 1):
+        marker = _c("32", " (current)") if o == default else ""
+        print(f"    {_c('36', str(i) + ')')} {o}{marker}")
+    r = _ask(prompt, default)
+    s = str(r)
+    if s.isdigit() and 1 <= int(s) <= len(options):
+        return options[int(s) - 1]
+    return s if s in options else default
+
+
+# ------------------------------------------------------------------ icon ---
+def install_icon(distro: str) -> str | None:
+    """Copy the project icon somewhere Windows Terminal can always read it."""
+    src = None
+    for cand in (Path("/usr/lib/wsl/omarchy-wsl2.ico"),
+                 Path(__file__).resolve().parent.parent.parent.parent / "assets/omarchy-wsl2.ico",
+                 Path.cwd() / "assets/omarchy-wsl2.ico"):
+        if cand.is_file():
+            src = cand
+            break
+
+    local = windows_env("LOCALAPPDATA")
+    if src and local:
+        dest_dir_win = f"{local}\\omarchy-wsl2"
+        dest_dir = to_wsl_path(dest_dir_win)
+        if dest_dir:
+            try:
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dest_dir / "omarchy-wsl2.ico")
+                return f"{dest_dir_win}\\omarchy-wsl2.ico"
+            except OSError:
+                pass
+
+    # Fall back to the UNC path into the distro (needs the distro running).
+    if src and str(src).startswith("/usr/lib/wsl"):
+        return f"\\\\wsl.localhost\\{distro}\\usr\\lib\\wsl\\omarchy-wsl2.ico"
+    return None
+
+
+# ------------------------------------------------------------------ main ---
+def main() -> int:
+    ap = argparse.ArgumentParser(
+        prog="omarchy-wsl-wt",
+        description="Configure the Windows Terminal profile for Omarchy.")
+    ap.add_argument("--distro", default=detect_distro_name(),
+                    help="WSL distro / profile name (default: %(default)s)")
+    ap.add_argument("--from-profile", default=None, metavar="NAME",
+                    help="Inherit look-and-feel defaults from an existing "
+                         "profile, e.g. --from-profile Ubuntu")
+    ap.add_argument("-i", "--interactive", action="store_true",
+                    help="Prompt for each setting (defaults come from "
+                         "--from-profile when given)")
+    ap.add_argument("--theme", default=None,
+                    help="Omarchy theme to match (default: the distro's active theme)")
+    ap.add_argument("--opacity", type=int, default=None,
+                    help="Background opacity 0-100 (default: 90, or inherited)")
+    ap.add_argument("--no-acrylic", action="store_true",
+                    help="Disable the acrylic blur effect")
+    ap.add_argument("--font", default=None,
+                    help="Font face (default: JetBrainsMono Nerd Font, or inherited)")
+    ap.add_argument("--font-size", type=float, default=None)
+    ap.add_argument("--padding", default=None)
+    ap.add_argument("--set-default", action="store_true",
+                    help="Make this the default Windows Terminal profile")
+    ap.add_argument("--detect", action="store_true",
+                    help="Report what was found and exit without changing anything")
+    ap.add_argument("--restore", action="store_true",
+                    help="Restore the most recent backup")
+    ap.add_argument("--list-themes", action="store_true")
+    ap.add_argument("--list-profiles", action="store_true",
+                    help="List the Windows Terminal profiles found")
+    args = ap.parse_args()
+
+    if args.list_themes:
+        head("Available matched schemes")
+        for k, v in SCHEMES.items():
+            print(f"  {k:<14} {v['name']}")
+        return 0
+
+    if args.list_profiles:
+        s = find_settings()
+        if not s:
+            bad("Windows Terminal settings.json not found.")
+            return 1
+        try:
+            for p in profiles_list(load_settings(s)):
+                if not p.get("hidden"):
+                    print(p.get("name", "?"))
+        except json.JSONDecodeError as e:
+            bad(f"Could not parse settings.json: {e}")
+            return 1
+        return 0
+
+    head("Windows Terminal")
+    settings = find_settings()
+    if not settings:
+        bad("Windows Terminal settings.json not found.")
+        note("Is Windows Terminal installed?  winget install Microsoft.WindowsTerminal")
+        return 1
+    ok(f"settings.json: {settings}")
+
+    if args.restore:
+        backups = sorted(settings.parent.glob("settings.json.omarchy-bak.*"))
+        if not backups:
+            bad("No backup found.")
+            return 1
+        shutil.copy2(backups[-1], settings)
+        ok(f"Restored {backups[-1].name}")
+        return 0
+
+    try:
+        data = load_settings(settings)
+    except json.JSONDecodeError as e:
+        bad(f"Could not parse settings.json: {e}")
+        return 1
+
+    prof = find_profile(data, args.distro)
+    if prof:
+        ok(f"Found profile: {prof.get('name')}")
+    else:
+        warn(f"No profile named '{args.distro}' yet.")
+        note("WSL creates it on first launch. Start the distro once, then re-run.")
+        if args.detect:
+            return 1
+
+    # --- work out the defaults: our opinion, optionally overlaid with the
+    #     look of an existing profile the user already likes ---
+    OURS = {"font_face": "JetBrainsMono Nerd Font", "font_size": 11.0,
+            "opacity": 90, "acrylic": True, "padding": "10",
+            "cursor": "filledBox", "intense": "all"}
+    defaults = dict(OURS)
+
+    if args.from_profile:
+        inherited = inherit_from(data, args.from_profile)
+        if inherited:
+            ok(f"Inheriting look from profile '{args.from_profile}'")
+            for k, v in inherited.items():
+                if k != "scheme":
+                    note(f"  {k} = {v}")
+            defaults.update({k: v for k, v in inherited.items() if k != "scheme"})
+        else:
+            warn(f"No profile named '{args.from_profile}' to inherit from")
+
+    # Explicit flags always win over inherited/our defaults.
+    if args.font is not None:      defaults["font_face"] = args.font
+    if args.font_size is not None: defaults["font_size"] = args.font_size
+    if args.opacity is not None:   defaults["opacity"] = args.opacity
+    if args.padding is not None:   defaults["padding"] = args.padding
+    if args.no_acrylic:            defaults["acrylic"] = False
+
+    # Resolve the theme: explicit flag, else the distro's active theme.
+    theme = args.theme
+    if not theme:
+        for p in (Path.home() / ".config/omarchy/current/theme.name",
+                  Path("/home") / args.distro / ".config/omarchy/current/theme.name"):
+            try:
+                if p.is_file():
+                    theme = p.read_text().strip()
+                    break
+            except OSError:
+                pass
+    theme_slug = slug(theme) if theme else DEFAULT_THEME
+    if theme_slug not in SCHEMES:
+        warn(f"No matched scheme for '{theme_slug}'; using {DEFAULT_THEME}")
+        theme_slug = DEFAULT_THEME
+
+    set_default = args.set_default
+
+    # --- interactive: confirm or change each setting ---
+    if args.interactive:
+        head("Configure the Windows Terminal profile")
+        note("Press Enter to accept each default, or type a new value.")
+        print()
+
+        theme_slug = ask_choice("Colour scheme", list(SCHEMES), theme_slug)
+        defaults["font_face"] = ask_str("Font face", defaults["font_face"])
+        defaults["font_size"] = ask_float("Font size", float(defaults["font_size"]))
+        defaults["opacity"] = ask_int("Background opacity (0-100)", int(defaults["opacity"]))
+        defaults["acrylic"] = ask_bool("Use acrylic blur", bool(defaults["acrylic"]))
+        defaults["padding"] = ask_str("Padding", defaults["padding"])
+        defaults["cursor"] = ask_choice(
+            "Cursor shape",
+            ["filledBox", "bar", "underscore", "emptyBox", "vintage"],
+            str(defaults["cursor"]))
+        set_default = ask_bool("Make this the default Windows Terminal profile",
+                               set_default)
+
+    scheme = SCHEMES[theme_slug]
+    ok(f"Theme: {theme_slug} -> scheme '{scheme['name']}'")
+
+    icon = install_icon(args.distro)
+    if icon:
+        ok(f"Icon: {icon}")
+    else:
+        warn("Icon not found; leaving the profile icon unchanged")
+
+    if args.detect:
+        head("Detection only - nothing was changed")
+        note(f"Would set: scheme='{scheme['name']}' opacity={defaults['opacity']} "
+             f"acrylic={defaults['acrylic']} font='{defaults['font_face']}' "
+             f"size={defaults['font_size']} padding={defaults['padding']}")
+        return 0
+
+    if not prof:
+        return 1
+
+    # --- back up before touching anything ---
+    backup = settings.with_suffix(f".json.omarchy-bak.{int(time.time())}")
+    shutil.copy2(settings, backup)
+    ok(f"Backed up to {backup.name}")
+
+    # --- upsert the colour scheme ---
+    schemes = data.setdefault("schemes", [])
+    schemes[:] = [s for s in schemes if s.get("name") != scheme["name"]]
+    schemes.append(scheme)
+
+    # --- apply the profile settings ---
+    prof.update({
+        "colorScheme": scheme["name"],
+        "font": {"face": defaults["font_face"], "size": defaults["font_size"]},
+        "opacity": defaults["opacity"],
+        "useAcrylic": bool(defaults["acrylic"]),
+        "padding": defaults["padding"],
+        "cursorShape": defaults["cursor"],
+        "intenseTextStyle": defaults.get("intense", "all"),
+        "antialiasingMode": "grayscale",
+        "snapOnInput": True,
+    })
+    if icon:
+        prof["icon"] = icon
+    # Leave startingDirectory unset so the shell's own default (the Linux
+    # home directory) is used rather than a Windows path.
+    prof.pop("startingDirectory", None)
+
+    if set_default and prof.get("guid"):
+        data["defaultProfile"] = prof["guid"]
+        ok(f"Set as the default profile ({prof['guid']})")
+
+    settings.write_text(json.dumps(data, indent=4, ensure_ascii=False) + "\n",
+                        encoding="utf-8")
+
+    head("Applied")
+    ok(f"Profile '{prof.get('name')}' updated")
+    note(f"scheme={scheme['name']}  opacity={defaults['opacity']}  "
+         f"acrylic={defaults['acrylic']}  font={defaults['font_face']} "
+         f"{defaults['font_size']}pt")
+    print()
+    note("Windows Terminal picks up changes immediately - open a new tab to see it.")
+    if str(defaults["font_face"]).startswith("JetBrainsMono"):
+        note("If glyphs look wrong, install the font on Windows:")
+        note("  winget install --id DEVCOM.JetBrainsMonoNerdFont")
+    print()
+    note("Undo with: omarchy-wsl-wt --restore")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -486,6 +486,13 @@ do_build_install() {
   note "Check readiness:    wsl -d $CFG_NAME -- omarchy-wsl-doctor"
   [[ $CFG_PROFILE == desktop ]] && \
     note "Launch the desktop: wsl -d $CFG_NAME -- omarchy-wsl-desktop"
+
+  printf '\n'
+  if confirm "Style the Windows Terminal profile to match Omarchy now?"; then
+    do_terminal
+  else
+    note "You can do this later: ./omarchy-wsl2 -> 'Windows Terminal'"
+  fi
 }
 
 install_tools() {
@@ -554,6 +561,72 @@ do_modify() {
   esac
 }
 
+do_terminal() {
+  local WT="$REPO_ROOT/overlay/usr/local/bin/omarchy-wsl-wt"
+  [[ -x $WT ]] || { bad "Missing $WT"; return 1; }
+
+  title "Windows Terminal profile"
+
+  if ! python3 "$WT" --list-profiles >/dev/null 2>&1; then
+    bad "Windows Terminal was not found."
+    note "Install it with: winget install Microsoft.WindowsTerminal"
+    note "(Menu option 6 can do this for you.)"
+    return 1
+  fi
+  ok "Windows Terminal detected"
+
+  if ! distro_exists "$CFG_NAME"; then
+    warn "Distro '$CFG_NAME' is not installed yet."
+    note "WSL creates its Terminal profile on first launch - build and start it first."
+    return 1
+  fi
+
+  cat <<EOF
+
+  WSL creates a basic Terminal profile automatically. This makes it look like
+  Omarchy: matched colour scheme, Nerd Font, transparency and the project icon.
+
+  ${GREY}This matters in every mode - you launch headless shells, WSLg apps and
+  the desktop from this terminal.${R}
+EOF
+
+  # Offer to copy the look of a profile the user already likes.
+  local -a profiles=()
+  mapfile -t profiles < <(python3 "$WT" --list-profiles 2>/dev/null \
+    | grep -viE 'docker-desktop|omarchy' | awk 'NF' | sort -u)
+
+  local from=""
+  if (( ${#profiles[@]} )); then
+    printf '\n  %sCopy the look of an existing profile?%s\n\n' "$B" "$R"
+    printf '    %s0)%s %s(no - use omarchy-wsl2 defaults)%s\n' "$TEAL" "$R" "$GREY" "$R"
+    local i
+    for i in "${!profiles[@]}"; do
+      printf '    %s%d)%s %s\n' "$TEAL" "$((i+1))" "$R" "${profiles[$i]}"
+    done
+    local pick
+    printf '\n  Choice %s[0]%s: ' "$GREY" "$R"; read -r pick
+    pick=${pick:-0}
+    if [[ $pick =~ ^[0-9]+$ ]] && (( pick >= 1 && pick <= ${#profiles[@]} )); then
+      from="${profiles[$((pick-1))]}"
+      ok "Using '$from' as the starting point"
+    else
+      note "Using omarchy-wsl2 defaults"
+    fi
+  fi
+
+  printf '\n'
+  note "You'll be asked to confirm each setting; press Enter to accept."
+  printf '\n'
+
+  local -a wtargs=(--distro "$CFG_NAME" --theme "$CFG_THEME" --interactive)
+  [[ -n $from ]] && wtargs+=(--from-profile "$from")
+
+  python3 "$WT" "${wtargs[@]}"
+
+  printf '\n'
+  note "Revert at any time with:  python3 $WT --restore"
+}
+
 do_doctor() {
   if distro_exists "$CFG_NAME"; then
     title "Diagnostics for '$CFG_NAME'"
@@ -611,6 +684,7 @@ main() {
       "prereq|Check prerequisites|Verify the host and offer to install what's missing" \
       "build|Build & install|Create a new Omarchy WSL2 distro from scratch" \
       "modify|Modify existing|Change theme, add tools or tiers, update" \
+      "terminal|Windows Terminal|Style the Terminal profile to match Omarchy" \
       "learn|Set up omarchy-learn|AI tutor for Omarchy & WSL2 questions" \
       "doctor|Diagnostics|Check WSLg, GPU, systemd and desktop readiness" \
       "extras|Windows extras|Nerd Font, Windows Terminal, VS Code" \
@@ -622,6 +696,7 @@ main() {
       prereq)    check_prereqs ask; pause ;;
       build)     do_build_install; pause ;;
       modify)    do_modify; pause ;;
+      terminal)  do_terminal; pause ;;
       learn)     do_learn; pause ;;
       doctor)    do_doctor; pause ;;
       extras)    check_windows_extras; pause ;;

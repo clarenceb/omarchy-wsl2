@@ -28,6 +28,10 @@ cat <<'EOF'
   DIAGNOSTICS
     omarchy-wsl-doctor             check WSLg / GPU / systemd / Hyprland
 
+  APPEARANCE
+    omarchy-wsl-wt -i              style the Windows Terminal profile
+    omarchy-wsl-wt --restore       undo the last Terminal change
+
   LEARN
     oml "how do I change theme"    ask the built-in Omarchy/WSL2 tutor
     omarchy-learn --check          verify Copilot CLI + auth

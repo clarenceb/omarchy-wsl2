@@ -45,11 +45,71 @@ make all OMARCHY_THEME="Catppuccin"
 In Modes 1 and 2, Windows Terminal *is* your visible environment, so match it to
 your Omarchy theme.
 
-The image ships a Windows Terminal profile fragment
-(`/usr/lib/wsl/terminal-profile.json`) that WSL applies automatically at install
-time, giving you an "Omarchy Tokyo Night" scheme and JetBrainsMono Nerd Font.
+### The easy way: `omarchy-wsl-wt`
 
-To change it later, edit Windows Terminal's `settings.json`
+The image ships a configurator that styles the Terminal profile for you:
+
+```bash
+omarchy-wsl-wt --interactive
+```
+
+It prompts for each setting and shows the current value as the default, so you
+can just press Enter to accept:
+
+```
+  Colour scheme [tokyo-night]:
+  Font face [JetBrainsMono Nerd Font]:
+  Font size [11.0]:
+  Background opacity (0-100) [90]:
+  Use acrylic blur (yes/no) [yes]:
+  Padding [10]:
+  Cursor shape [filledBox]:
+  Make this the default Windows Terminal profile (yes/no) [no]:
+```
+
+**Already like how another profile looks?** Inherit its settings as the
+defaults, then tweak:
+
+```bash
+omarchy-wsl-wt --interactive --from-profile Ubuntu
+```
+
+```
+  ✔ Inheriting look from profile 'Ubuntu'
+      font_face = Hack
+      opacity = 90
+      acrylic = True
+```
+
+Non-interactive use:
+
+```bash
+omarchy-wsl-wt --theme "Gruvbox" --opacity 85 --font "Hack"
+omarchy-wsl-wt --set-default
+omarchy-wsl-wt --detect          # show what it would do, change nothing
+omarchy-wsl-wt --list-themes
+omarchy-wsl-wt --list-profiles
+omarchy-wsl-wt --restore         # undo - it backs up settings.json first
+```
+
+It also installs the project icon to
+`%LOCALAPPDATA%\omarchy-wsl2\omarchy-wsl2.ico` and points the profile at it, so
+the tab and dropdown show the Omarchy mark.
+
+You can also reach this from the wizard:
+
+```bash
+./omarchy-wsl2      # -> "Windows Terminal"
+```
+
+> Every change is preceded by a timestamped backup
+> (`settings.json.omarchy-bak.<epoch>`), and `--restore` puts the most recent
+> one back.
+
+### Doing it by hand
+
+WSL auto-generates a profile from `/usr/lib/wsl/terminal-profile.json` at
+install time. To change it later, edit Windows Terminal's `settings.json`
 (`Ctrl+Shift+,`) and adjust the `omarchy` profile:
 
 ```json
@@ -57,9 +117,10 @@ To change it later, edit Windows Terminal's `settings.json`
   "name": "omarchy",
   "colorScheme": "Omarchy Tokyo Night",
   "font": { "face": "JetBrainsMono Nerd Font", "size": 11 },
-  "opacity": 92,
+  "opacity": 90,
   "useAcrylic": true,
-  "padding": "10"
+  "padding": "10",
+  "icon": "%LOCALAPPDATA%\\omarchy-wsl2\\omarchy-wsl2.ico"
 }
 ```
 

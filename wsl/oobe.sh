@@ -66,18 +66,33 @@ sync_default_user() {
 main() {
   banner
 
+  # CRITICAL: oobe.command runs on the FIRST shell of any kind, including
+  # non-interactive ones (wsl -d omarchy -- somecommand). If we prompt when
+  # stdin is not a terminal, every scripted first launch hangs forever.
+  local interactive=0
+  [[ -t 0 ]] && interactive=1
+
   if getent passwd "$DEFAULT_UID" >/dev/null; then
     # The image already bakes in an 'omarchy' user at uid 1000.
     local name
     name=$(getent passwd "$DEFAULT_UID" | cut -d: -f1)
     echo "Using the preconfigured account '${name}'."
-    echo
-    if passwd -S "$name" 2>/dev/null | awk '{print $2}' | grep -qx 'NP'; then
-      echo "Set a password for '${name}' (leave it unset to keep sudo passwordless):"
-      passwd "$name" || true
+
+    if (( interactive )); then
+      echo
+      echo "sudo is already passwordless for this account."
+      printf "Set a login password for '%s' anyway? [y/N] " "$name"
+      local reply=""
+      read -r -t 30 reply || reply=n
+      [[ ${reply,,} == y* ]] && passwd "$name"
     fi
   else
-    create_user || warn 'User setup was interrupted; falling back to root.'
+    if (( interactive )); then
+      create_user || warn 'User setup was interrupted; falling back to root.'
+    else
+      warn "No uid ${DEFAULT_UID} account and no terminal to create one."
+      warn "Run 'wsl -d omarchy' interactively to finish setup."
+    fi
   fi
 
   sync_default_user
@@ -89,6 +104,7 @@ main() {
   echo '  omarchy-wsl-doctor     check WSLg / GPU / desktop readiness'
   echo '  omarchy-wsl-desktop    launch the nested Hyprland session'
   echo '  omarchy-theme-set      change the theme'
+  echo '  oml "<question>"       ask the built-in Omarchy/WSL2 tutor'
   echo '  omarchy-wsl-help       what to do next'
   echo
 

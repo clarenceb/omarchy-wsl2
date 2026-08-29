@@ -173,6 +173,17 @@ distclean: clean
 .PHONY: lint
 lint:
 	@command -v shellcheck >/dev/null || { echo "shellcheck not installed"; exit 1; }
-	@shellcheck -S warning -e SC1091,SC2317 \
-	  $(S)/*.sh $(S)/provision/*.sh wsl/oobe.sh overlay/usr/local/bin/* ./omarchy-wsl2 \
+	@# Only shell scripts: omarchy-wsl-wt and make-logo.py are Python.
+	@shellcheck -S warning -e SC1091,SC2317,SC1090 \
+	  $(S)/*.sh $(S)/provision/*.sh wsl/oobe.sh ./omarchy-wsl2 \
+	  overlay/usr/local/bin/omarchy-wsl-app \
+	  overlay/usr/local/bin/omarchy-wsl-desktop \
+	  overlay/usr/local/bin/omarchy-wsl-devtools \
+	  overlay/usr/local/bin/omarchy-wsl-doctor \
+	  overlay/usr/local/bin/omarchy-wsl-env \
+	  overlay/usr/local/bin/omarchy-wsl-help \
+	  overlay/opt/omarchy-learn/bin/omarchy-learn \
 	  && echo "shellcheck clean"
+	@python3 -m py_compile $(S)/make-logo.py overlay/usr/local/bin/omarchy-wsl-wt \
+	  && echo "python syntax clean"
+	@rm -rf $(S)/__pycache__ overlay/usr/local/bin/__pycache__ 2>/dev/null || true
