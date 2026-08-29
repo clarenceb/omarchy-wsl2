@@ -148,6 +148,73 @@ wsl --shutdown
 
 A full `--shutdown` is required — restarting the terminal isn't enough.
 
+### `Failed to start the systemd user session` (Docker Desktop)
+
+```
+wsl: Failed to start the systemd user session for 'omarchy'.
+```
+```
+user@1000.service: Failed to spawn executor: Device or resource busy
+```
+
+**Cause: Docker Desktop's WSL integration**, not this image. It bind-mounts into
+your distro and leaves `PID 0` "ghost" entries in the cgroup tree. cgroup v2
+forbids forking into a cgroup that has `subtree_control` enabled while child
+cgroups hold processes, so `clone3(CLONE_INTO_CGROUP)` returns `EBUSY`.
+systemd only retries without the flag on `ENOSYS`/`EOPNOTSUPP` — **not**
+`EBUSY` — so it gives up and the user manager never starts.
+
+This affects **any** Arch-based WSL distro on systemd ≥ 256, including the
+official `wsl --install archlinux`.
+
+**Fix:**
+
+1. Docker Desktop → **Settings → Resources → WSL Integration**
+2. Turn it **off** for this distro
+3. From Windows: `wsl --shutdown`
+
+Then verify:
+
+```bash
+systemctl --user is-active default.target      # expect: active
+omarchy-wsl-doctor                             # detects this automatically
+```
+
+To keep using Docker afterwards, either enable the native daemon:
+
+```bash
+sudo systemctl enable --now docker
+```
+
+or point the CLI at Docker Desktop's socket without the integration:
+
+```bash
+export DOCKER_HOST=unix:///mnt/wsl/docker-desktop/shared-sockets/guest-services/docker.sock
+```
+
+**Impact if you don't fix it:**
+
+| Mode | Affected |
+|---|---|
+| 1 — headless CLI | No |
+| 2 — WSLg apps | Mostly no; apps run, but see the dbus note below |
+| 3 — Hyprland desktop | Yes — user units (pipewire etc.) won't start |
+
+### GUI apps spam `Failed to connect to socket /run/user/1000/bus`
+
+A downstream symptom of the above: no user session means no session dbus, which
+costs you notifications, portals and keyring access.
+
+The image works around this — `omarchy-wsl-env` starts a plain `dbus-daemon`
+session bus when systemd's is missing. If you still see the error:
+
+```bash
+source /usr/local/bin/omarchy-wsl-env && owsl_ensure_dbus && echo "$DBUS_SESSION_BUS_ADDRESS"
+sudo pacman -S --needed dbus
+```
+
+Fixing the Docker Desktop cause above is the better long-term answer.
+
 ### GUI apps don't start
 
 ```bash

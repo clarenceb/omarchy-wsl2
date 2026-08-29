@@ -47,12 +47,45 @@ owsl_link_wayland_socket() {
   return 0
 }
 
+# A session dbus is needed for notifications, portals, the keyring and GTK/Qt
+# internals. Normally systemd's user manager provides it at
+# $XDG_RUNTIME_DIR/bus - but that manager frequently fails under WSL (Docker
+# Desktop's integration leaves PID 0 ghosts in the cgroup tree, so
+# clone3(CLONE_INTO_CGROUP) returns EBUSY). Fall back to a plain session bus so
+# GUI apps work either way.
+owsl_ensure_dbus() {
+  [[ -n ${DBUS_SESSION_BUS_ADDRESS:-} ]] && return 0
+
+  local rt="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  mkdir -p "$rt" 2>/dev/null || true
+  chmod 700 "$rt" 2>/dev/null || true
+
+  if [[ -S "$rt/bus" ]]; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=$rt/bus"
+    return 0
+  fi
+
+  command -v dbus-daemon >/dev/null 2>&1 || return 1
+
+  # --fork daemonises; another shell may win the race, so re-check after.
+  dbus-daemon --session --address="unix:path=$rt/bus" \
+              --fork --nopidfile --syslog-only >/dev/null 2>&1 || true
+
+  if [[ -S "$rt/bus" ]]; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=$rt/bus"
+    return 0
+  fi
+  return 1
+}
+
 # Standard WSLg client environment: Wayland + X11 + audio.
 owsl_export_wslg_env() {
   owsl_link_wayland_socket || true
 
   [[ -z ${DISPLAY:-} ]] && export DISPLAY=:0
   [[ -S /mnt/wslg/PulseServer ]] && export PULSE_SERVER=/mnt/wslg/PulseServer
+
+  owsl_ensure_dbus || true
 
   export XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-wayland}"
   export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-Hyprland}"

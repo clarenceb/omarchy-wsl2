@@ -62,6 +62,9 @@ npm
 # --- clipboard bridge (works with WSLg, used by nvim/tmux) ---
 wl-clipboard
 
+# --- session bus (notifications, portals, keyring) ---
+dbus
+
 # --- misc ---
 plocate
 socat

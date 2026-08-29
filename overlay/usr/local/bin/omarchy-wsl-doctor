@@ -27,6 +27,36 @@ else
   no "systemd not running - set '[boot] systemd=true' in /etc/wsl.conf, then 'wsl --shutdown'"
 fi
 
+# The per-user systemd manager is what breaks first under WSL, and the usual
+# culprit is Docker Desktop rather than anything in this image.
+if [[ -d /run/systemd/system ]]; then
+  if systemctl is-active user@"$(id -u)".service >/dev/null 2>&1; then
+    ok "systemd user session active"
+  else
+    no "systemd user session failed (user@$(id -u).service)"
+
+    # Docker Desktop's WSL integration bind-mounts into the distro and leaves
+    # PID 0 "ghost" entries in the cgroup tree. cgroup v2 then refuses
+    # clone3(CLONE_INTO_CGROUP) with EBUSY, and systemd only retries on
+    # ENOSYS/EOPNOTSUPP - so the user manager never starts.
+    ddesktop=0
+    [[ -d /mnt/wsl/docker-desktop-bind-mounts ]] && ddesktop=1
+    grep -qs docker-desktop /proc/mounts && ddesktop=1
+    if (( ddesktop )); then
+      no "Docker Desktop WSL integration detected - this is the usual cause"
+      printf '      Fix: Docker Desktop > Settings > Resources > WSL Integration\n'
+      printf '           turn it OFF for this distro, then run: wsl --shutdown\n'
+      printf '      See docs/09-troubleshooting.md\n'
+    fi
+
+    if journalctl -u user@"$(id -u)".service -n 20 --no-pager 2>/dev/null \
+         | grep -q 'Failed to spawn executor'; then
+      printf '      Symptom: clone3(CLONE_INTO_CGROUP) returning EBUSY\n'
+      printf '      Impact:  modes 1 and 2 still work; user units (mode 3) do not\n'
+    fi
+  fi
+fi
+
 head_ "WSLg (graphical apps)"
 if [[ -d /mnt/wslg ]]; then
   ok "/mnt/wslg present"
@@ -42,6 +72,13 @@ fi
 
 if [[ -S /tmp/.X11-unix/X0 ]]; then ok "XWayland socket /tmp/.X11-unix/X0"; else hmm "No X11 socket - X11-only apps may not start"; fi
 if [[ -S /mnt/wslg/PulseServer ]]; then ok "Audio via /mnt/wslg/PulseServer"; else hmm "No WSLg PulseServer socket - no sound"; fi
+
+owsl_ensure_dbus >/dev/null 2>&1 || true
+if [[ -n ${DBUS_SESSION_BUS_ADDRESS:-} ]]; then
+  ok "Session dbus: ${DBUS_SESSION_BUS_ADDRESS#unix:path=}"
+else
+  hmm "No session dbus - notifications, portals and keyring will not work"
+fi
 
 head_ "GPU / rendering"
 if [[ -e /dev/dxg ]]; then
