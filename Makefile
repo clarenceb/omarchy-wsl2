@@ -33,7 +33,9 @@ OMARCHY_UID   ?= 1001
 # --import/--export, and NTFS avoids a 9p round-trip for multi-GB files.
 WIN_ROOT      ?= /mnt/c/wsl/omarchy-wsl2
 CACHE_DIR     ?= $(WIN_ROOT)/cache
-BUILD_DIR     ?= $(WIN_ROOT)/build
+# Per-distro subdirectory: two builds under different NAMEs must not share a
+# directory, or wsl --import fails with ERROR_FILE_EXISTS.
+BUILD_DIR     ?= $(WIN_ROOT)/build/$(BUILD_DISTRO)
 DIST_DIR      ?= $(WIN_ROOT)/dist
 OUT_NAME      ?= $(NAME)-$(PROFILE)-$(ARCH)
 

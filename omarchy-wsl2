@@ -187,12 +187,15 @@ version_ge() { # version_ge A B  -> true if A >= B
 # Artefact locations. These MUST match the Makefile's defaults; override both
 # by exporting WIN_ROOT before running the wizard.
 WIN_ROOT="${WIN_ROOT:-/mnt/c/wsl/omarchy-wsl2}"
-BUILD_DIR="$WIN_ROOT/build"
 DIST_DIR="$WIN_ROOT/dist"
 
 # The throwaway distro `make seed` creates; mirrors the Makefile's
 # BUILD_DISTRO = $(NAME)-build.
 build_distro() { echo "${CFG_NAME}-build"; }
+
+# Per-distro subdirectory. Functions, not constants, because CFG_NAME changes
+# while the wizard runs (the rename flow) and BUILD_DIR must follow it.
+build_dir() { echo "$WIN_ROOT/build/$(build_distro)"; }
 
 image_path() { echo "$DIST_DIR/${CFG_NAME}-${CFG_PROFILE}-$(host_arch).wsl"; }
 
@@ -388,7 +391,7 @@ show_status() {
   # Surface the scratch distro so its disk cost is never a surprise.
   local bd; bd=$(build_distro)
   if distro_exists "$bd"; then
-    local bsize; bsize=$(du -sh "$BUILD_DIR" 2>/dev/null | cut -f1)
+    local bsize; bsize=$(du -sh "$(build_dir)" 2>/dev/null | cut -f1)
     warn "Scratch distro '$bd' still registered${bsize:+ (${bsize})} - 'make clean' to remove"
   fi
 }
@@ -625,7 +628,7 @@ offer_build_cleanup() {
   distro_exists "$bd" || return 0
 
   local size
-  size=$(du -sh "$BUILD_DIR" 2>/dev/null | cut -f1)
+  size=$(du -sh "$(build_dir)" 2>/dev/null | cut -f1)
 
   title "Clean up"
   note "The scratch distro '$bd' is still registered${size:+ (${size})}."
