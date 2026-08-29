@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="omarchy-wsl2">
+  <title>omarchy-wsl2</title>
+  <desc>An original mark for the omarchy-wsl2 project: three tiled panes forming a dwindle layout inside a rounded badge, with a terminal prompt in the primary pane.</desc>
+
+  <defs>
+    <linearGradient id="badge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1B2340"/>
+      <stop offset="1" stop-color="#0D1120"/>
+    </linearGradient>
+    <linearGradient id="paneMain" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3DDCC8"/>
+      <stop offset="1" stop-color="#2AA6C4"/>
+    </linearGradient>
+    <linearGradient id="paneTop" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7C6CF5"/>
+      <stop offset="1" stop-color="#5B4BD6"/>
+    </linearGradient>
+    <linearGradient id="paneBottom" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F5A65B"/>
+      <stop offset="1" stop-color="#E8842B"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="16" y="16" width="480" height="480" rx="104" fill="url(#badge)"/>
+  <rect x="16" y="16" width="480" height="480" rx="104" fill="none" stroke="#3DDCC8" stroke-opacity="0.28" stroke-width="4"/>
+
+  <!-- dwindle tiling layout: one primary pane, two stacked secondary panes -->
+  <g>
+    <rect x="80" y="112" width="196" height="288" rx="26" fill="url(#paneMain)"/>
+    <rect x="300" y="112" width="132" height="132" rx="26" fill="url(#paneTop)"/>
+    <rect x="300" y="268" width="132" height="132" rx="26" fill="url(#paneBottom)"/>
+  </g>
+
+  <!-- terminal prompt inside the primary pane -->
+  <g stroke="#0D1120" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M132 212 L172 256 L132 300"/>
+  </g>
+  <rect x="188" y="286" width="56" height="18" rx="9" fill="#0D1120"/>
+</svg>

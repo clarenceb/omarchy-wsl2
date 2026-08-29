@@ -1,0 +1,52 @@
+# desktop.packages - Tier 3: the full Hyprland session (nested or VNC).
+#
+# Under WSL2 Hyprland CANNOT drive a real display: WSLg exposes /dev/dxg for
+# rendering but no /dev/dri/cardN with kernel mode-setting, so wlroots' DRM
+# backend aborts with `wlr_backend_get_drm_fd() failed!`.
+#
+# We therefore run Hyprland with its *Wayland* backend (nested inside WSLg) or
+# its *headless* backend behind wayvnc. See docs/03-modes.md.
+#
+# Enable with: make build PROFILE=desktop
+
+# --- compositor ---
+hyprland
+hyprland-protocols
+xdg-desktop-portal-hyprland
+
+# --- Hyprland companions that work without KMS/hardware ---
+hyprpicker
+hyprlang
+hyprutils
+
+# --- bar, launcher, notifications, wallpaper ---
+waybar
+wofi
+mako
+swaybg
+
+# --- Omarchy's Quickshell-based desktop kit ---
+quickshell
+
+# --- screenshot / input synthesis ---
+grim
+slurp
+wtype
+
+# --- XWayland so X11-only apps work inside the nested session ---
+xorg-xwayland
+
+# --- seat management (wlroots links against libseat) ---
+seatd
+
+# --- remote access for the "desktop in a window" mode ---
+wayvnc
+
+# --- polkit agent so GUI privilege prompts resolve ---
+polkit-gnome
+
+# --- audio (WSLg provides a PulseAudio server; pipewire clients still help) ---
+pipewire
+pipewire-pulse
+wireplumber
+pamixer

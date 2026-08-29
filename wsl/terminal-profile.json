@@ -1,0 +1,43 @@
+{
+  "profiles": [
+    {
+      "antialiasingMode": "grayscale",
+      "colorScheme": "Omarchy Tokyo Night",
+      "font": {
+        "face": "JetBrainsMono Nerd Font",
+        "size": 11
+      },
+      "opacity": 92,
+      "useAcrylic": true,
+      "cursorShape": "filledBox",
+      "padding": "10",
+      "startingDirectory": "~",
+      "icon": "ms-appx:///ProfileIcons/{9acb9455-ca41-5af7-950f-6bca1bc9722f}.png"
+    }
+  ],
+  "schemes": [
+    {
+      "name": "Omarchy Tokyo Night",
+      "background": "#1A1B26",
+      "foreground": "#A9B1D6",
+      "cursorColor": "#C0CAF5",
+      "selectionBackground": "#33467C",
+      "black": "#15161E",
+      "red": "#F7768E",
+      "green": "#9ECE6A",
+      "yellow": "#E0AF68",
+      "blue": "#7AA2F7",
+      "purple": "#BB9AF7",
+      "cyan": "#7DCFFF",
+      "white": "#A9B1D6",
+      "brightBlack": "#414868",
+      "brightRed": "#F7768E",
+      "brightGreen": "#9ECE6A",
+      "brightYellow": "#E0AF68",
+      "brightBlue": "#7AA2F7",
+      "brightPurple": "#BB9AF7",
+      "brightCyan": "#7DCFFF",
+      "brightWhite": "#C0CAF5"
+    }
+  ]
+}

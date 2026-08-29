@@ -1,0 +1,76 @@
+#!/bin/bash
+# omarchy-wsl-doctor - diagnose whether this WSL2 distro can run Omarchy's
+# CLI, WSLg GUI apps and the nested Hyprland desktop.
+
+set -uo pipefail
+source /usr/local/bin/omarchy-wsl-env
+
+pass=0 fail=0 warn=0
+ok()   { printf '  \033[32m✔\033[0m %s\n' "$1"; ((pass++)); }
+no()   { printf '  \033[31m✘\033[0m %s\n' "$1"; ((fail++)); }
+hmm()  { printf '  \033[33m!\033[0m %s\n' "$1"; ((warn++)); }
+head_() { printf '\n\033[1;36m%s\033[0m\n' "$1"; }
+
+head_ "Platform"
+if owsl_is_wsl; then ok "Running under WSL"; else no "Not WSL - these helpers assume WSL2"; fi
+printf '    kernel: %s\n    arch:   %s\n' "$(uname -r)" "$(uname -m)"
+[[ -f /etc/arch-release ]] && ok "Arch-based rootfs" || no "Not an Arch rootfs"
+
+if [[ $(uname -m) == "aarch64" ]]; then
+  hmm "aarch64: Omarchy's own pacman repo is x86_64-only (see docs/08-arm64.md)"
+fi
+
+head_ "systemd"
+if [[ -d /run/systemd/system ]]; then
+  ok "systemd is running (PID 1 = $(ps -p 1 -o comm= 2>/dev/null))"
+else
+  no "systemd not running - set '[boot] systemd=true' in /etc/wsl.conf, then 'wsl --shutdown'"
+fi
+
+head_ "WSLg (graphical apps)"
+if [[ -d /mnt/wslg ]]; then
+  ok "/mnt/wslg present"
+else
+  no "/mnt/wslg missing - WSLg unavailable; update WSL ('wsl --update')"
+fi
+
+if owsl_link_wayland_socket; then
+  ok "Wayland socket: \$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"
+else
+  no "No Wayland socket found (checked \$XDG_RUNTIME_DIR, /mnt/wslg/runtime-dir, /run/user/\$UID)"
+fi
+
+if [[ -S /tmp/.X11-unix/X0 ]]; then ok "XWayland socket /tmp/.X11-unix/X0"; else hmm "No X11 socket - X11-only apps may not start"; fi
+if [[ -S /mnt/wslg/PulseServer ]]; then ok "Audio via /mnt/wslg/PulseServer"; else hmm "No WSLg PulseServer socket - no sound"; fi
+
+head_ "GPU / rendering"
+if [[ -e /dev/dxg ]]; then
+  ok "/dev/dxg present (Direct3D12 virtual GPU)"
+else
+  hmm "/dev/dxg missing - software rendering only"
+fi
+if compgen -G '/dev/dri/card*' >/dev/null; then
+  hmm "/dev/dri/card* exists (unexpected on WSL)"
+else
+  ok "No /dev/dri/cardN - expected; this is why Hyprland must run nested, not on DRM"
+fi
+if command -v glxinfo >/dev/null 2>&1; then
+  printf '    renderer: %s\n' "$(GALLIUM_DRIVER=${GALLIUM_DRIVER:-d3d12} glxinfo -B 2>/dev/null | awk -F': ' '/OpenGL renderer/{print $2}')"
+fi
+
+head_ "Omarchy"
+if command -v hyprland >/dev/null 2>&1 || command -v Hyprland >/dev/null 2>&1; then
+  ok "Hyprland installed ($( (Hyprland --version 2>/dev/null || hyprland --version 2>/dev/null) | head -1))"
+else
+  hmm "Hyprland not installed - build with PROFILE=desktop for the full session"
+fi
+for c in omarchy-theme-set waybar foot wayvnc; do
+  command -v "$c" >/dev/null 2>&1 && ok "$c" || hmm "$c not installed"
+done
+[[ -d ${OMARCHY_PATH:-$HOME/.local/share/omarchy} ]] \
+  && ok "Omarchy checkout at ${OMARCHY_PATH:-$HOME/.local/share/omarchy}" \
+  || hmm "No Omarchy checkout found"
+
+head_ "Summary"
+printf '  %d passed, %d warnings, %d failures\n\n' "$pass" "$warn" "$fail"
+(( fail == 0 )) || exit 1

@@ -1,0 +1,425 @@
+#!/usr/bin/env bash
+# omarchy-learn - ask questions about Omarchy and Omarchy-on-WSL2.
+#
+# A thin, opinionated wrapper around the GitHub Copilot CLI:
+#   * a system prompt that makes it an Omarchy/WSL2 tutor
+#   * grounded in the docs actually installed on this machine
+#   * remembers your preferences between questions
+#   * renders Markdown answers with glow
+#   * defaults to the 'auto' model (cheapest - Copilot picks)
+#
+#   omarchy-learn "how do I list the packages I have installed"
+#   oml "what's the WSL equivalent of apt upgrade"
+#   omarchy-learn --check
+#
+# Installed at /opt/omarchy-learn, symlinked into /usr/local/bin.
+
+set -uo pipefail
+
+VERSION=1.0.0
+SELF_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+SHARE_DIR="$SELF_DIR/share"
+SYSTEM_PROMPT="$SHARE_DIR/system-prompt.md"
+
+CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy-learn"
+MEM_FILE="$CONF_DIR/memory.md"
+CONF_FILE="$CONF_DIR/config"
+
+DEFAULT_MODEL=auto
+
+# Directories the assistant may read to ground its answers.
+GROUND_DIRS=(/usr/share/omarchy-wsl2/docs /usr/share/omarchy)
+
+# ------------------------------------------------------------------ colour ---
+if [[ -t 1 ]] && [[ ${TERM:-dumb} != dumb ]] && [[ -z ${NO_COLOR:-} ]]; then
+  B=$'\033[1m'; R=$'\033[0m'
+  TEAL=$'\033[38;5;80m'; INDIGO=$'\033[38;5;99m'; AMBER=$'\033[38;5;215m'
+  GREEN=$'\033[38;5;78m'; RED=$'\033[38;5;203m'; YELLOW=$'\033[38;5;221m'
+  GREY=$'\033[38;5;245m'
+else
+  B=; R=; TEAL=; INDIGO=; AMBER=; GREEN=; RED=; YELLOW=; GREY=
+fi
+
+ok()   { printf '  %s✔%s %s\n' "$GREEN" "$R" "$1"; }
+bad()  { printf '  %s✘%s %s\n' "$RED" "$R" "$1"; }
+warn() { printf '  %s!%s %s\n' "$YELLOW" "$R" "$1"; }
+note() { printf '  %s%s%s\n' "$GREY" "$1" "$R"; }
+
+logo() {
+  cat <<EOF
+   ${TEAL}┌─────────┬──────┐${R}
+   ${TEAL}│${R}   ${B}${TEAL}>_${R}    ${TEAL}│${R} ${INDIGO}  ?  ${R}${TEAL}│${R}   ${B}omarchy-learn${R} ${GREY}v${VERSION}${R}
+   ${TEAL}│${R}         ${TEAL}├──────┤${R}   ${GREY}Ask anything about Omarchy & WSL2${R}
+   ${TEAL}└─────────┴${R}${AMBER}──────┘${R}
+EOF
+}
+
+# ------------------------------------------------------------------ config ---
+mkdir -p "$CONF_DIR" 2>/dev/null || true
+# shellcheck disable=SC1090
+[[ -f $CONF_FILE ]] && . "$CONF_FILE"
+MODEL="${OML_MODEL:-${MODEL:-$DEFAULT_MODEL}}"
+RENDER="${RENDER:-auto}"
+
+save_config() {
+  cat >"$CONF_FILE" <<EOF
+# omarchy-learn config - safe to edit.
+MODEL='$MODEL'
+RENDER='$RENDER'
+EOF
+}
+
+# --------------------------------------------------------------- rendering ---
+renderer() {
+  case "$RENDER" in
+    raw) echo cat; return ;;
+    glow) command -v glow >/dev/null && { echo glow; return; } ;;
+  esac
+  if command -v glow >/dev/null; then echo glow
+  elif command -v bat >/dev/null; then echo bat
+  else echo cat; fi
+}
+
+render() {
+  local r cols
+  r=$(renderer)
+  cols=$(tput cols 2>/dev/null || echo 100)
+  (( cols > 100 )) && cols=100
+  case "$r" in
+    glow) glow -w "$cols" - ;;
+    bat)  bat --style=plain --language=markdown --paging=never ;;
+    *)    cat ;;
+  esac
+}
+
+# ------------------------------------------------------------------ checks ---
+have_copilot() { command -v copilot >/dev/null 2>&1; }
+
+copilot_authed() {
+  # Copilot CLI stores credentials differently across versions (keyring on some
+  # platforms, files on others), so probe broadly rather than for one filename.
+  [[ -n ${GH_TOKEN:-} || -n ${GITHUB_TOKEN:-} ]] && return 0
+  [[ -s "$HOME/.copilot/config.json" ]] && return 0
+  compgen -G "$HOME/.copilot/*auth*"  >/dev/null 2>&1 && return 0
+  compgen -G "$HOME/.copilot/*token*" >/dev/null 2>&1 && return 0
+  return 1
+}
+
+do_check() {
+  logo; echo
+  printf '%sConfiguration%s\n\n' "$B" "$R"
+
+  local fail=0
+
+  if have_copilot; then
+    ok "GitHub Copilot CLI: $(command -v copilot)"
+    local v; v=$(copilot --version 2>/dev/null | head -1)
+    [[ -n $v ]] && note "version $v"
+  else
+    bad "GitHub Copilot CLI not installed"
+    note "install with: omarchy-learn --setup"
+    fail=1
+  fi
+
+  if copilot_authed; then
+    ok "Copilot authentication found"
+  else
+    bad "Not authenticated with GitHub Copilot"
+    note "run: copilot login      (or export GH_TOKEN=\$(gh auth token))"
+    fail=1
+  fi
+
+  case "$(renderer)" in
+    glow) ok "Markdown renderer: glow" ;;
+    bat)  warn "Markdown renderer: bat (install 'glow' for nicer output)" ;;
+    *)    warn "No Markdown renderer; output will be plain text"
+          note "install with: sudo pacman -S glow" ;;
+  esac
+
+  ok "Model: $MODEL"
+  [[ $MODEL == auto ]] && note "'auto' lets Copilot pick the cheapest suitable model"
+
+  printf '\n%sGrounding%s\n\n' "$B" "$R"
+  local found=0 d
+  for d in "${GROUND_DIRS[@]}"; do
+    if [[ -d $d ]]; then ok "$d"; found=1; else note "not present: $d"; fi
+  done
+  (( found )) || warn "No local docs found; answers rely on the model alone"
+
+  printf '\n%sMemory%s\n\n' "$B" "$R"
+  if [[ -s $MEM_FILE ]]; then
+    ok "$(grep -c '^- ' "$MEM_FILE" 2>/dev/null || echo 0) remembered preference(s)"
+    note "$MEM_FILE"
+  else
+    note "No memories yet - add one with: omarchy-learn --remember \"...\""
+  fi
+
+  echo
+  (( fail == 0 )) && ok "${B}Ready.${R} Try: omarchy-learn \"how do I change theme\"" \
+                  || bad "${B}Setup incomplete${R} - run: omarchy-learn --setup"
+  return $fail
+}
+
+do_setup() {
+  logo; echo
+  printf '%sSetup%s\n\n' "$B" "$R"
+
+  if have_copilot; then
+    ok "Copilot CLI already installed"
+  else
+    warn "GitHub Copilot CLI is not installed."
+    printf '  Install it now? %s[Y/n]%s ' "$GREY" "$R"; read -r a
+    if [[ ${a:-Y} == [Yy]* ]]; then
+      if command -v pacman >/dev/null && pacman -Si github-copilot-cli >/dev/null 2>&1; then
+        sudo pacman -S --noconfirm --needed github-copilot-cli
+      elif command -v npm >/dev/null; then
+        npm config set prefix "$HOME/.local" >/dev/null 2>&1
+        npm install -g @github/copilot || bad "npm install failed"
+        grep -q '.local/bin' "$HOME/.bashrc" 2>/dev/null \
+          || echo 'export PATH="$HOME/.local/bin:$PATH"' >>"$HOME/.bashrc"
+        export PATH="$HOME/.local/bin:$PATH"
+      else
+        bad "Need pacman or npm. Install Node first:  sudo pacman -S nodejs npm"
+        return 1
+      fi
+      have_copilot && ok "Copilot CLI installed" || bad "Install failed"
+    fi
+  fi
+
+  if ! command -v glow >/dev/null; then
+    printf '  Install %sglow%s for Markdown rendering? %s[Y/n]%s ' "$B" "$R" "$GREY" "$R"; read -r a
+    [[ ${a:-Y} == [Yy]* ]] && sudo pacman -S --noconfirm --needed glow 2>/dev/null
+    command -v glow >/dev/null && ok "glow installed" || warn "glow not installed"
+  else
+    ok "glow already installed"
+  fi
+
+  if copilot_authed; then
+    ok "Already authenticated"
+  else
+    warn "Not authenticated with GitHub Copilot."
+    printf '  Run "copilot login" now? %s[Y/n]%s ' "$GREY" "$R"; read -r a
+    [[ ${a:-Y} == [Yy]* ]] && copilot login
+  fi
+
+  save_config
+  echo; ok "Setup complete. Try: ${B}oml \"how do I change theme\"${R}"
+}
+
+# ------------------------------------------------------------------ memory ---
+mem_add() {
+  local fact="$*"
+  [[ -z $fact ]] && { bad "Nothing to remember."; return 1; }
+  [[ -f $MEM_FILE ]] || printf '# omarchy-learn memories\n\n' >"$MEM_FILE"
+  printf -- '- %s\n' "$fact" >>"$MEM_FILE"
+  ok "Remembered: $fact"
+}
+
+mem_list() {
+  if [[ -s $MEM_FILE ]]; then
+    printf '\n%sRemembered preferences%s %s(%s)%s\n\n' "$B" "$R" "$GREY" "$MEM_FILE" "$R"
+    grep '^- ' "$MEM_FILE" | sed 's/^- //' | nl -w3 -s'. ' | sed 's/^/  /'
+    echo
+  else
+    note "No memories yet. Add one: omarchy-learn --remember \"I use fish, not bash\""
+  fi
+}
+
+mem_forget() {
+  local which=${1:-}
+  if [[ -z $which || $which == all ]]; then
+    printf '  Delete ALL memories? %s[y/N]%s ' "$GREY" "$R"; read -r a
+    [[ ${a:-N} == [Yy]* ]] && { rm -f "$MEM_FILE"; ok "All memories cleared."; }
+  elif [[ $which =~ ^[0-9]+$ ]]; then
+    local line; line=$(grep -n '^- ' "$MEM_FILE" | sed -n "${which}p" | cut -d: -f1)
+    [[ -z $line ]] && { bad "No memory #$which"; return 1; }
+    sed -i "${line}d" "$MEM_FILE"; ok "Forgot memory #$which"
+  else
+    bad "usage: omarchy-learn --forget [N|all]"
+  fi
+}
+
+# -------------------------------------------------------------------- ask ----
+build_context() {
+  cat "$SYSTEM_PROMPT"
+  if [[ -s $MEM_FILE ]]; then
+    printf '\n## Remembered user preferences\n\n'
+    printf 'Honour these unless the question overrides them.\n\n'
+    grep '^- ' "$MEM_FILE"
+  fi
+  printf '\n## Environment\n\n'
+  printf -- '- Architecture: %s\n' "$(uname -m)"
+  printf -- '- Kernel: %s\n' "$(uname -r)"
+  if grep -qi microsoft /proc/version 2>/dev/null; then
+    printf -- '- Running under WSL2: yes\n'
+  else
+    printf -- '- Running under WSL2: no (bare metal or VM)\n'
+  fi
+  [[ -f /etc/omarchy.conf ]] && sed 's/^/- /' /etc/omarchy.conf
+  if [[ -r /etc/os-release ]]; then
+    printf -- '- Profile: %s\n' \
+      "$(grep -s OMARCHY_WSL2_PROFILE /etc/os-release | cut -d= -f2 | tr -d '"')"
+  fi
+}
+
+ask() {
+  local question="$*"
+  [[ -z $question ]] && { bad "Ask a question."; return 1; }
+
+  if ! have_copilot; then
+    bad "GitHub Copilot CLI is not installed."
+    note "run: omarchy-learn --setup"
+    return 1
+  fi
+  if ! copilot_authed; then
+    warn "Could not confirm Copilot authentication - trying anyway."
+    note "If this fails, run: copilot login"
+  fi
+
+  local ctx; ctx=$(build_context)
+
+  local -a args=(
+    --model "$MODEL"
+    --allow-all-tools
+    # This is a teaching tool: it must never run commands or edit files.
+    --deny-tool=shell
+    --deny-tool=write
+    --no-color
+    --log-level none
+    --disable-builtin-mcps
+  )
+
+  local d
+  for d in "${GROUND_DIRS[@]}"; do
+    [[ -d $d ]] && args+=(--add-dir "$d")
+  done
+
+  printf '%s  thinking…%s\r' "$GREY" "$R" >&2
+  local out
+  out=$(copilot "${args[@]}" -p "$ctx
+
+---
+
+## User question
+
+$question" 2>/dev/null)
+  local rc=$?
+  printf '\r%*s\r' 40 '' >&2
+
+  if (( rc != 0 )) || [[ -z $out ]]; then
+    bad "Copilot returned no answer (exit $rc)."
+    note "Try: omarchy-learn --check"
+    return 1
+  fi
+
+  printf '%s\n' "$out" | render
+}
+
+repl() {
+  logo
+  note "Interactive mode. Type a question, or /help. Ctrl-D to exit."
+  echo
+  local q
+  while true; do
+    printf '%s❯%s ' "$TEAL" "$R"
+    read -r q || { echo; break; }
+    case "$q" in
+      '') continue ;;
+      /q|/quit|/exit) break ;;
+      /help) usage; continue ;;
+      /check) do_check; continue ;;
+      /memories) mem_list; continue ;;
+      /remember\ *) mem_add "${q#/remember }"; continue ;;
+      /model\ *) MODEL="${q#/model }"; save_config; ok "Model: $MODEL"; continue ;;
+      /topics) topics; continue ;;
+    esac
+    echo
+    ask "$q"
+    echo
+  done
+}
+
+topics() {
+  cat <<EOF
+
+  ${B}Try asking${R}
+
+    ${GREY}Packages${R}
+      oml "how do I list the packages I have installed"
+      oml "what's the pacman equivalent of apt search"
+      oml "how do I install something from the AUR"
+
+    ${GREY}Omarchy${R}
+      oml "how do I change the theme"
+      oml "what are the essential Hyprland keybindings"
+      oml "how does omarchy-update work"
+
+    ${GREY}WSL2${R}
+      oml "why can't I run the full Hyprland desktop"
+      oml "how do I launch a GUI app from Omarchy"
+      oml "how do I back up my distro"
+
+    ${GREY}Coming from Ubuntu${R}
+      oml "I'm used to apt, what do I need to know"
+      oml "what is a rolling release and what breaks"
+
+EOF
+}
+
+usage() {
+  cat <<EOF
+
+  ${B}omarchy-learn${R} - learn Omarchy and Omarchy-on-WSL2
+
+  ${B}Usage${R}
+    omarchy-learn "your question"     ask a question
+    oml "your question"               short alias
+    omarchy-learn                     interactive mode
+
+  ${B}Options${R}
+    --check              verify Copilot CLI, auth, renderer and docs
+    --setup              install Copilot CLI / glow and log in
+    --topics             suggested starter questions
+    --remember "fact"    store a preference for future answers
+    --memories           list stored preferences
+    --forget [N|all]     remove a preference
+    --model <name>       set the model (default: auto = cheapest)
+    --raw                print raw Markdown, no glow rendering
+    --version            print the version
+    -h, --help           this help
+
+  ${B}Examples${R}
+    oml "how do I list the packages I have installed"
+    omarchy-learn --remember "I prefer fish over bash"
+    omarchy-learn --model gpt-5.4 "explain Hyprland's dwindle layout"
+
+EOF
+}
+
+# -------------------------------------------------------------------- main ---
+[[ -f $SYSTEM_PROMPT ]] || { bad "Missing $SYSTEM_PROMPT"; exit 1; }
+
+ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --check)     do_check; exit $? ;;
+    --setup)     do_setup; exit $? ;;
+    --topics)    topics; exit 0 ;;
+    --remember)  shift; mem_add "$@"; exit $? ;;
+    --memories)  mem_list; exit 0 ;;
+    --forget)    shift; mem_forget "${1:-}"; exit $? ;;
+    --model)     MODEL="${2:?--model needs a value}"; save_config; shift 2 ;;
+    --raw)       RENDER=raw; shift ;;
+    --version)   echo "omarchy-learn $VERSION"; exit 0 ;;
+    -h|--help)   usage; exit 0 ;;
+    --)          shift; ARGS+=("$@"); break ;;
+    -*)          bad "Unknown option: $1"; usage; exit 1 ;;
+    *)           ARGS+=("$1"); shift ;;
+  esac
+done
+
+if (( ${#ARGS[@]} == 0 )); then
+  repl
+else
+  ask "${ARGS[@]}"
+fi

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 260" width="1120" height="260" role="img" aria-label="omarchy-wsl2">
+  <title>omarchy-wsl2 wordmark</title>
+
+  <defs>
+    <linearGradient id="wbadge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1B2340"/>
+      <stop offset="1" stop-color="#0D1120"/>
+    </linearGradient>
+    <linearGradient id="wpaneMain" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3DDCC8"/>
+      <stop offset="1" stop-color="#2AA6C4"/>
+    </linearGradient>
+    <linearGradient id="wpaneTop" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7C6CF5"/>
+      <stop offset="1" stop-color="#5B4BD6"/>
+    </linearGradient>
+    <linearGradient id="wpaneBottom" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F5A65B"/>
+      <stop offset="1" stop-color="#E8842B"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(10,10) scale(0.46875)">
+    <rect x="16" y="16" width="480" height="480" rx="104" fill="url(#wbadge)"/>
+    <rect x="16" y="16" width="480" height="480" rx="104" fill="none" stroke="#3DDCC8" stroke-opacity="0.28" stroke-width="4"/>
+    <rect x="80" y="112" width="196" height="288" rx="26" fill="url(#wpaneMain)"/>
+    <rect x="300" y="112" width="132" height="132" rx="26" fill="url(#wpaneTop)"/>
+    <rect x="300" y="268" width="132" height="132" rx="26" fill="url(#wpaneBottom)"/>
+    <g stroke="#0D1120" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M132 212 L172 256 L132 300"/>
+    </g>
+    <rect x="188" y="286" width="56" height="18" rx="9" fill="#0D1120"/>
+  </g>
+
+  <g font-family="'DejaVu Sans','Segoe UI',system-ui,sans-serif">
+    <text x="290" y="130" font-size="96" font-weight="700" fill="#13233A">omarchy</text>
+    <text x="290" y="216" font-size="60" font-weight="600" fill="#0E8FA3" letter-spacing="10">WSL2</text>
+    <rect x="286" y="152" width="470" height="4" rx="2" fill="#5B4BD6" fill-opacity="0.55"/>
+  </g>
+</svg>

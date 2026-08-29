@@ -1,0 +1,165 @@
+#!/bin/bash
+# omarchy-wsl-devtools - install developer tool bundles into a running Omarchy
+# distro. Used by the ./omarchy-wsl2 wizard, but fine to run directly.
+#
+#   sudo omarchy-wsl-devtools gh copilot mise docker
+#   sudo omarchy-wsl-devtools --list
+
+set -uo pipefail
+
+TARGET_USER="${SUDO_USER:-${OMARCHY_USER:-omarchy}}"
+ARCH="$(uname -m)"
+
+ok()   { printf '  \033[32m✔\033[0m %s\n' "$1"; }
+warn() { printf '  \033[33m!\033[0m %s\n' "$1"; }
+step() { printf '\n\033[1;36m==> %s\033[0m\n' "$1"; }
+
+pac() {
+  local failed=()
+  for p in "$@"; do
+    pacman -S --noconfirm --needed "$p" >/dev/null 2>&1 && ok "$p" || failed+=("$p")
+  done
+  (( ${#failed[@]} )) && warn "unavailable on $ARCH: ${failed[*]}"
+  return 0
+}
+
+as_user() { sudo -u "$TARGET_USER" -H bash -lc "$1"; }
+
+usage() {
+  cat <<'EOF'
+usage: omarchy-wsl-devtools <bundle>...
+
+Bundles:
+  gh        GitHub CLI
+  copilot   GitHub Copilot CLI (npm)
+  mise      mise runtime version manager
+  docker    Docker engine + compose (systemd service)
+  node      Node.js + npm
+  python    Python + pip + uv
+  rust      Rust toolchain via rustup
+  go        Go toolchain
+  k8s       kubectl, helm, k9s
+  learn     omarchy-learn AI tutor (Copilot CLI + glow)
+  extras    httpie, yq, hyperfine, zellij, tokei, tealdeer
+  all       everything above
+EOF
+}
+
+[[ $# -eq 0 || $1 == -h || $1 == --help || $1 == --list ]] && { usage; exit 0; }
+
+if (( EUID != 0 )); then
+  echo "This needs root: sudo omarchy-wsl-devtools $*" >&2
+  exit 1
+fi
+
+BUNDLES=("$@")
+[[ ${BUNDLES[0]} == all ]] && BUNDLES=(gh copilot mise docker node python rust go k8s learn extras)
+
+for bundle in "${BUNDLES[@]}"; do
+  case "$bundle" in
+    gh)
+      step "GitHub CLI"
+      pac github-cli xdg-utils
+      ;;
+
+    copilot)
+      step "GitHub Copilot CLI"
+      if [[ $ARCH == x86_64 ]] && pacman -Si github-copilot-cli >/dev/null 2>&1; then
+        pac github-copilot-cli
+      else
+        pac nodejs npm
+        # Install globally without needing root-owned npm prefixes.
+        as_user 'npm config set prefix ~/.local && npm install -g @github/copilot' \
+          >/dev/null 2>&1 && ok "@github/copilot (npm)" \
+          || warn "npm install of @github/copilot failed"
+        as_user 'grep -q ".local/bin" ~/.bashrc || echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> ~/.bashrc'
+      fi
+      ;;
+
+    mise)
+      step "mise"
+      if ! pacman -S --noconfirm --needed mise >/dev/null 2>&1; then
+        pacman -S --noconfirm --needed mise-bin >/dev/null 2>&1 || warn "mise unavailable"
+      fi
+      command -v mise >/dev/null && ok "mise"
+      as_user 'grep -q "mise activate" ~/.bashrc || echo "eval \"\$(mise activate bash)\"" >> ~/.bashrc'
+      ;;
+
+    docker)
+      step "Docker"
+      pac docker docker-buildx docker-compose
+      if command -v docker >/dev/null; then
+        systemctl enable docker.service >/dev/null 2>&1 && ok "docker.service enabled"
+        usermod -aG docker "$TARGET_USER" 2>/dev/null && ok "added $TARGET_USER to the docker group"
+        warn "If Docker Desktop's WSL integration is on, do not start this daemon too."
+      fi
+      ;;
+
+    node)
+      step "Node.js"
+      pac nodejs npm
+      ;;
+
+    python)
+      step "Python"
+      pac python python-pip uv
+      ;;
+
+    rust)
+      step "Rust"
+      pac rustup
+      command -v rustup >/dev/null && as_user 'rustup default stable' >/dev/null 2>&1 \
+        && ok "stable toolchain"
+      ;;
+
+    go)
+      step "Go"
+      pac go
+      ;;
+
+    k8s)
+      step "Kubernetes tooling"
+      pac kubectl helm k9s
+      ;;
+
+    extras)
+      step "Extras"
+      pac httpie yq hyperfine zellij tokei tealdeer jq
+      ;;
+
+    learn)
+      step "omarchy-learn (AI tutor)"
+      pac glow
+      # The Copilot CLI is what omarchy-learn talks to.
+      if ! command -v copilot >/dev/null 2>&1; then
+        if [[ $ARCH == x86_64 ]] && pacman -Si github-copilot-cli >/dev/null 2>&1; then
+          pac github-copilot-cli
+        else
+          pac nodejs npm
+          as_user 'npm config set prefix ~/.local && npm install -g @github/copilot' \
+            >/dev/null 2>&1 && ok "@github/copilot (npm)" \
+            || warn "npm install of @github/copilot failed"
+          as_user 'grep -q ".local/bin" ~/.bashrc || echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> ~/.bashrc'
+        fi
+      else
+        ok "Copilot CLI already installed"
+      fi
+      if [[ -x /opt/omarchy-learn/bin/omarchy-learn ]]; then
+        ln -sfn /opt/omarchy-learn/bin/omarchy-learn /usr/local/bin/omarchy-learn
+        ln -sfn /opt/omarchy-learn/bin/omarchy-learn /usr/local/bin/oml
+        ok "omarchy-learn + 'oml' alias linked"
+        warn "Authenticate once with:  copilot login"
+        warn "Then try:  oml \"how do I list the packages I have installed\""
+      else
+        warn "/opt/omarchy-learn is missing - rebuild the image to install it"
+      fi
+      ;;
+
+    *)
+      warn "unknown bundle: $bundle"
+      ;;
+  esac
+done
+
+step "Done"
+echo "  Open a new shell (or run 'exec bash -l') to pick up PATH changes."

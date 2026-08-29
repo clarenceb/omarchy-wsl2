@@ -1,0 +1,31 @@
+# omarchy-repo.packages - packages from Omarchy's own pacman repo.
+#
+# IMPORTANT: https://pkgs.omarchy.org ships 200+ packages for x86_64 but only
+# `omarchy-keyring` for aarch64. Everything below is therefore installed ONLY
+# on x86_64. On aarch64 these are skipped and equivalents from base/apps/
+# desktop tiers are used instead (see docs/08-arm64.md).
+#
+# Verified against https://pkgs.omarchy.org/x86_64/omarchy.db
+
+# --- Omarchy's Neovim distribution ---
+omarchy-nvim
+
+# --- launcher stack (replaces wofi) ---
+walker
+elephant
+elephant-desktopapplications
+elephant-calc
+elephant-clipboard
+elephant-files
+elephant-runner
+elephant-symbols
+elephant-websearch
+
+# --- Omarchy first-party GUI/TUI apps ---
+omacalc
+omacut
+omawrite
+cliamp
+
+# --- AUR helper ---
+yay

@@ -1,0 +1,72 @@
+#!/bin/bash
+# omarchy-wsl-env - shared environment detection for the omarchy-wsl2 helpers.
+# Source this; don't execute it.
+#
+#   source /usr/local/lib/omarchy-wsl2/omarchy-wsl-env
+
+owsl_is_wsl() {
+  [[ -e /proc/sys/fs/binfmt_misc/WSLInterop ]] || grep -qi microsoft /proc/version
+}
+
+# WSLg publishes its Wayland socket under /mnt/wslg, which is usually NOT the
+# same directory as XDG_RUNTIME_DIR when systemd is enabled (/run/user/UID).
+# Find the socket wherever it actually lives.
+owsl_find_wayland_socket() {
+  local d s
+  for d in "${XDG_RUNTIME_DIR:-}" /mnt/wslg/runtime-dir "/run/user/$(id -u)"; do
+    [[ -z $d ]] && continue
+    for s in "${WAYLAND_DISPLAY:-wayland-0}" wayland-0 wayland-1; do
+      if [[ -S "$d/$s" ]]; then
+        printf '%s\n%s\n' "$d" "$s"
+        return 0
+      fi
+    done
+  done
+  return 1
+}
+
+# Make the WSLg socket reachable from the systemd-managed XDG_RUNTIME_DIR by
+# symlinking it in. Wayland clients only look inside XDG_RUNTIME_DIR.
+owsl_link_wayland_socket() {
+  local found dir sock rt
+  found=$(owsl_find_wayland_socket) || return 1
+  dir=$(sed -n 1p <<<"$found")
+  sock=$(sed -n 2p <<<"$found")
+
+  rt="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  mkdir -p "$rt" 2>/dev/null || true
+
+  if [[ "$dir" != "$rt" && ! -e "$rt/$sock" ]]; then
+    ln -sf "$dir/$sock" "$rt/$sock" 2>/dev/null || true
+    # Some toolkits also want the lock file.
+    [[ -e "$dir/$sock.lock" ]] && ln -sf "$dir/$sock.lock" "$rt/$sock.lock" 2>/dev/null
+  fi
+
+  export XDG_RUNTIME_DIR="$rt"
+  export WAYLAND_DISPLAY="$sock"
+  return 0
+}
+
+# Standard WSLg client environment: Wayland + X11 + audio.
+owsl_export_wslg_env() {
+  owsl_link_wayland_socket || true
+
+  [[ -z ${DISPLAY:-} ]] && export DISPLAY=:0
+  [[ -S /mnt/wslg/PulseServer ]] && export PULSE_SERVER=/mnt/wslg/PulseServer
+
+  export XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-wayland}"
+  export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-Hyprland}"
+  export MOZ_ENABLE_WAYLAND=1
+  export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland;xcb}"
+  export GDK_BACKEND="${GDK_BACKEND:-wayland,x11}"
+  export _JAVA_AWT_WM_NONREPARENTING=1
+
+  # WSLg's virtual GPU is Direct3D12-backed via /dev/dxg, exposed to Mesa as
+  # the d3d12 Gallium driver. Only opt in when the device is really there.
+  if [[ -e /dev/dxg ]]; then
+    export GALLIUM_DRIVER="${GALLIUM_DRIVER:-d3d12}"
+    export LIBVA_DRIVER_NAME="${LIBVA_DRIVER_NAME:-d3d12}"
+  else
+    export LIBGL_ALWAYS_SOFTWARE=1
+  fi
+}

@@ -1,0 +1,104 @@
+#!/bin/bash
+# omarchy-wsl-desktop - start the Omarchy Hyprland desktop under WSL2.
+#
+# Two strategies, because WSL2 has no KMS-capable /dev/dri/cardN and so
+# Hyprland's normal DRM backend cannot own a display:
+#
+#   nested  (default)  Hyprland runs as a Wayland *client* of WSLg. You get a
+#                      single Hyprland window on your Windows desktop.
+#   vnc                Hyprland runs on its headless backend behind wayvnc.
+#                      Connect from Windows with any VNC client - this gives a
+#                      resizable, full-screen-capable desktop.
+#
+# Usage:
+#   omarchy-wsl-desktop [nested|vnc] [--size WxH] [--port N] [--software]
+
+set -euo pipefail
+source /usr/local/bin/omarchy-wsl-env
+
+MODE="nested"
+SIZE="1920x1080"
+PORT="5900"
+FORCE_SOFTWARE=0
+
+usage() { sed -n '2,17p' "$0" | sed 's/^# \?//'; exit "${1:-0}"; }
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    nested|vnc) MODE="$1"; shift ;;
+    --size) SIZE="${2:?--size needs WxH}"; shift 2 ;;
+    --port) PORT="${2:?--port needs a number}"; shift 2 ;;
+    --software) FORCE_SOFTWARE=1; shift ;;
+    -h|--help) usage 0 ;;
+    *) echo "unknown option: $1" >&2; usage 1 ;;
+  esac
+done
+
+hypr_bin() { command -v Hyprland 2>/dev/null || command -v hyprland 2>/dev/null; }
+HYPR=$(hypr_bin) || { echo "Hyprland is not installed. Rebuild with PROFILE=desktop." >&2; exit 1; }
+
+owsl_export_wslg_env
+
+if (( FORCE_SOFTWARE )); then
+  export WLR_RENDERER=pixman
+  export LIBGL_ALWAYS_SOFTWARE=1
+  unset GALLIUM_DRIVER
+fi
+
+# Hyprland/Aquamarine refuse to start without a private XDG_RUNTIME_DIR they
+# can create their own sockets in.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+mkdir -p "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
+
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=Hyprland
+export XDG_SESSION_DESKTOP=Hyprland
+
+case "$MODE" in
+  nested)
+    if [[ -z ${WAYLAND_DISPLAY:-} ]]; then
+      echo "No WSLg Wayland socket found - cannot nest. Try: omarchy-wsl-desktop vnc" >&2
+      exit 1
+    fi
+    # Hyprland (via Aquamarine) selects its Wayland backend automatically when
+    # WAYLAND_DISPLAY is set. WLR_BACKENDS is kept for older wlroots builds.
+    export WLR_BACKENDS=wayland
+    export AQ_WL_OUTPUTS="${AQ_WL_OUTPUTS:-1}"
+    echo "Starting nested Hyprland inside WSLg (host socket: $WAYLAND_DISPLAY)..."
+    exec "$HYPR"
+    ;;
+
+  vnc)
+    command -v wayvnc >/dev/null 2>&1 || { echo "wayvnc is not installed." >&2; exit 1; }
+
+    export WLR_BACKENDS=headless
+    export WLR_RENDERER="${WLR_RENDERER:-pixman}"
+    export WLR_HEADLESS_OUTPUTS=1
+    export AQ_HEADLESS_OUTPUTS=1
+    # Detach from WSLg so Hyprland does not pick the Wayland backend instead.
+    unset WAYLAND_DISPLAY
+
+    echo "Starting headless Hyprland (${SIZE}) with wayvnc on port ${PORT}..."
+    "$HYPR" &
+    HYPR_PID=$!
+    trap 'kill "$HYPR_PID" 2>/dev/null || true' EXIT INT TERM
+
+    # Wait for Hyprland to publish its compositor socket.
+    for _ in $(seq 1 40); do
+      HYPR_SOCK=$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -name 'wayland-*' -type s 2>/dev/null | head -1)
+      [[ -n ${HYPR_SOCK:-} ]] && break
+      sleep 0.25
+    done
+    [[ -z ${HYPR_SOCK:-} ]] && { echo "Hyprland did not start; see ~/.local/share/hyprland/hyprland.log" >&2; exit 1; }
+
+    WAYLAND_DISPLAY="$(basename "$HYPR_SOCK")"
+    export WAYLAND_DISPLAY
+    hyprctl keyword monitor "HEADLESS-1,${SIZE}@60,0x0,1" >/dev/null 2>&1 || true
+
+    echo
+    echo "Connect a VNC client on Windows to:  127.0.0.1:${PORT}"
+    echo "Press Ctrl-C to shut the desktop down."
+    echo
+    exec wayvnc 0.0.0.0 "$PORT"
+    ;;
+esac

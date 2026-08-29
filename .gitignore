@@ -1,0 +1,19 @@
+# Build output
+build/
+dist/
+cache/
+
+# Generated raster art (regenerate with `make logo`).
+# The images embedded in README/docs are committed so they render on GitHub.
+assets/*.png
+assets/*.ico
+!assets/logo-wordmark.png
+!assets/logo-256.png
+!assets/omarchy-learn-256.png
+
+# Editor / OS noise
+.DS_Store
+*.swp
+.idea/
+.vscode/
+.omarchy-wsl2.conf

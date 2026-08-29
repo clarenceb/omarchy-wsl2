@@ -1,0 +1,68 @@
+# base.packages - Tier 1: headless CLI/TUI core.
+#
+# Everything here is available for BOTH x86_64 (Arch) and aarch64 (Arch Linux
+# ARM). This tier alone gives you a complete Omarchy terminal experience.
+#
+# Lines starting with '#' and blank lines are ignored.
+
+# --- toolchain / package management ---
+base-devel
+git
+sudo
+which
+pacman-contrib
+expac
+fakeroot
+
+# --- shell & prompt ---
+bash-completion
+starship
+zoxide
+tmux
+
+# --- editors ---
+neovim
+
+# --- modern CLI replacements (the Omarchy staples) ---
+bat
+eza
+fd
+ripgrep
+fzf
+jq
+less
+tree
+tldr
+man-db
+dua-cli
+
+# --- TUI apps ---
+btop
+lazygit
+fastfetch
+gum
+
+# --- network / transfer ---
+curl
+wget
+rsync
+openssh
+inetutils
+whois
+
+# --- archives ---
+unzip
+zip
+
+# --- language runtimes commonly needed by dev tooling ---
+python
+nodejs
+npm
+
+# --- clipboard bridge (works with WSLg, used by nvim/tmux) ---
+wl-clipboard
+
+# --- misc ---
+plocate
+socat
+imagemagick

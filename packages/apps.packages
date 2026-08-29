@@ -1,0 +1,41 @@
+# apps.packages - Tier 2: graphical apps launched individually through WSLg.
+#
+# These are ordinary GTK/Qt/Wayland clients. Under WSL2 they connect to the
+# WSLg compositor and appear as normal Windows windows - no Hyprland required.
+#
+# Enable with: make build PROFILE=apps  (or PROFILE=desktop)
+
+# --- portals & desktop integration (makes file pickers / xdg-open work) ---
+xdg-desktop-portal-gtk
+xdg-utils
+xdg-user-dirs
+gvfs
+gnome-keyring
+libsecret
+
+# --- fonts (Omarchy leans heavily on Nerd Font glyphs) ---
+noto-fonts
+noto-fonts-cjk
+noto-fonts-emoji
+ttf-jetbrains-mono-nerd
+woff2-font-awesome
+
+# --- themes / icons ---
+gnome-themes-extra
+adwaita-icon-theme
+
+# --- terminal emulator (Omarchy's default) ---
+foot
+
+# --- browser ---
+chromium
+
+# --- file manager & viewers ---
+nautilus
+imv
+mpv
+evince
+
+# --- media helpers ---
+ffmpegthumbnailer
+yt-dlp

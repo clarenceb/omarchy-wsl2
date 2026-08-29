@@ -1,0 +1,24 @@
+#!/bin/bash
+# omarchy-wsl-app - run a single graphical app through WSLg with the right
+# Wayland/X11/audio environment already exported.
+#
+#   omarchy-wsl-app chromium
+#   omarchy-wsl-app foot
+#   omarchy-wsl-app nautilus ~/Projects
+
+set -euo pipefail
+source /usr/local/bin/omarchy-wsl-env
+
+if [[ $# -eq 0 ]]; then
+  echo "usage: omarchy-wsl-app <command> [args...]" >&2
+  exit 1
+fi
+
+owsl_export_wslg_env
+
+if [[ -z ${WAYLAND_DISPLAY:-} && -z ${DISPLAY:-} ]]; then
+  echo "No WSLg display available. Run omarchy-wsl-doctor to diagnose." >&2
+  exit 1
+fi
+
+exec "$@"

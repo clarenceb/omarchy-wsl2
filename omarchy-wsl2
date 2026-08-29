@@ -1,0 +1,635 @@
+#!/usr/bin/env bash
+# omarchy-wsl2 - interactive wizard.
+#
+# A shortcut around the Makefile: checks prerequisites (and offers to fix
+# them), asks what kind of Omarchy you want, then builds and installs it.
+# Re-run it any time to modify an existing setup.
+#
+#   ./omarchy-wsl2
+#
+# Run this from inside any existing WSL2 distro (Ubuntu is fine).
+# PowerShell is NOT required - see windows/omarchy-wsl2.ps1 if you'd rather
+# start from Windows.
+
+set -uo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONF_FILE="$REPO_ROOT/.omarchy-wsl2.conf"
+cd "$REPO_ROOT" || exit 1
+
+# ------------------------------------------------------------------ theme ---
+if [[ -t 1 ]] && [[ ${TERM:-dumb} != dumb ]]; then
+  B=$'\033[1m'; DIM=$'\033[2m'; R=$'\033[0m'
+  TEAL=$'\033[38;5;80m'; INDIGO=$'\033[38;5;99m'; AMBER=$'\033[38;5;215m'
+  GREEN=$'\033[38;5;78m'; RED=$'\033[38;5;203m'; YELLOW=$'\033[38;5;221m'
+  GREY=$'\033[38;5;245m'; WHITE=$'\033[38;5;255m'
+else
+  B=; DIM=; R=; TEAL=; INDIGO=; AMBER=; GREEN=; RED=; YELLOW=; GREY=; WHITE=
+fi
+
+ok()    { printf '  %s✔%s %s\n' "$GREEN" "$R" "$1"; }
+bad()   { printf '  %s✘%s %s\n' "$RED" "$R" "$1"; }
+warn()  { printf '  %s!%s %s\n' "$YELLOW" "$R" "$1"; }
+note()  { printf '  %s%s%s\n' "$GREY" "$1" "$R"; }
+title() { printf '\n%s%s%s\n%s%s%s\n' "$B$WHITE" "$1" "$R" "$GREY" "$(printf '─%.0s' $(seq 1 ${#1}))" "$R"; }
+
+banner() {
+  clear 2>/dev/null || true
+  cat <<EOF
+
+   ${TEAL}╭────────────────────────────╮${R}
+   ${TEAL}│${R}  ${TEAL}┌───────────┬${R}${INDIGO}────────┐${R}  ${TEAL}│${R}
+   ${TEAL}│${R}  ${TEAL}│${R}           ${TEAL}│${R}${INDIGO}        │${R}  ${TEAL}│${R}   ${B}${WHITE}omarchy-wsl2${R}
+   ${TEAL}│${R}  ${TEAL}│${R}    ${B}${TEAL}>_${R}     ${TEAL}├${R}${INDIGO}────────┤${R}  ${TEAL}│${R}   ${GREY}Omarchy, as a WSL2 distribution${R}
+   ${TEAL}│${R}  ${TEAL}│${R}           ${TEAL}│${R}${AMBER}        │${R}  ${TEAL}│${R}
+   ${TEAL}│${R}  ${TEAL}└───────────┴${R}${AMBER}────────┘${R}  ${TEAL}│${R}
+   ${TEAL}╰────────────────────────────╯${R}
+
+EOF
+}
+
+pause() { printf '\n%sPress Enter to continue...%s' "$GREY" "$R"; read -r _; }
+
+# ------------------------------------------------------------------- input ---
+# ask <var> <prompt> <default>
+ask() {
+  local __var=$1 prompt=$2 default=${3:-} reply
+  if [[ -n $default ]]; then
+    printf '  %s %s[%s]%s: ' "$prompt" "$GREY" "$default" "$R"
+  else
+    printf '  %s: ' "$prompt"
+  fi
+  read -r reply
+  printf -v "$__var" '%s' "${reply:-$default}"
+}
+
+# confirm <prompt> [Y|N]
+confirm() {
+  local prompt=$1 default=${2:-Y} reply hint
+  [[ $default == Y ]] && hint="Y/n" || hint="y/N"
+  printf '  %s %s[%s]%s ' "$prompt" "$GREY" "$hint" "$R"
+  read -r reply
+  reply=${reply:-$default}
+  [[ ${reply,,} == y* ]]
+}
+
+# choose <var> <prompt> <default-index> <"key|label|description">...
+choose() {
+  local __var=$1 prompt=$2 default=$3; shift 3
+  local -a keys=() labels=() descs=()
+  local item
+  for item in "$@"; do
+    IFS='|' read -r k l d <<<"$item"
+    keys+=("$k"); labels+=("$l"); descs+=("$d")
+  done
+
+  printf '\n  %s%s%s\n\n' "$B" "$prompt" "$R"
+  local i
+  for i in "${!keys[@]}"; do
+    printf '    %s%d)%s %s%-22s%s %s%s%s\n' \
+      "$TEAL" "$((i+1))" "$R" "$B" "${labels[$i]}" "$R" "$GREY" "${descs[$i]}" "$R"
+  done
+
+  local reply
+  while true; do
+    printf '\n  Choice %s[%s]%s: ' "$GREY" "$default" "$R"
+    read -r reply
+    reply=${reply:-$default}
+    if [[ $reply =~ ^[0-9]+$ ]] && (( reply >= 1 && reply <= ${#keys[@]} )); then
+      printf -v "$__var" '%s' "${keys[$((reply-1))]}"
+      return 0
+    fi
+    bad "Enter a number between 1 and ${#keys[@]}"
+  done
+}
+
+# multiselect <var> <prompt> <preselected-csv> <"key|label|description">...
+multiselect() {
+  local __var=$1 prompt=$2 preset=$3; shift 3
+  local -a keys=() labels=() descs=() on=()
+  local item
+  for item in "$@"; do
+    IFS='|' read -r k l d <<<"$item"
+    keys+=("$k"); labels+=("$l"); descs+=("$d")
+    if [[ ",$preset," == *",$k,"* ]]; then on+=(1); else on+=(0); fi
+  done
+
+  local reply i
+  while true; do
+    printf '\n  %s%s%s\n  %stype numbers to toggle (e.g. "1 3"), Enter when done%s\n\n' \
+      "$B" "$prompt" "$R" "$GREY" "$R"
+    for i in "${!keys[@]}"; do
+      if (( on[i] )); then
+        printf '    %s%d) [%s✔%s] %s%-16s%s %s%s%s\n' \
+          "$TEAL" "$((i+1))" "$GREEN" "$TEAL" "$B" "${labels[$i]}" "$R" "$GREY" "${descs[$i]}" "$R"
+      else
+        printf '    %s%d) [ ]%s %s%-16s%s %s%s%s\n' \
+          "$TEAL" "$((i+1))" "$R" "" "${labels[$i]}" "$R" "$GREY" "${descs[$i]}" "$R"
+      fi
+    done
+    printf '\n  Toggle: '
+    read -r reply
+    [[ -z $reply ]] && break
+    for tok in $reply; do
+      if [[ $tok =~ ^[0-9]+$ ]] && (( tok >= 1 && tok <= ${#keys[@]} )); then
+        i=$((tok-1)); on[i]=$(( 1 - on[i] ))
+      fi
+    done
+    printf '\n'
+  done
+
+  local out=()
+  for i in "${!keys[@]}"; do (( on[i] )) && out+=("${keys[$i]}"); done
+  printf -v "$__var" '%s' "$(IFS=,; echo "${out[*]}")"
+}
+
+# ------------------------------------------------------------------ config ---
+# Defaults, overridden by the saved config.
+CFG_NAME=omarchy
+CFG_PROFILE=desktop
+CFG_THEME="Tokyo Night"
+CFG_TOOLS=""
+CFG_REF=master
+
+# shellcheck disable=SC1090  # config path is intentionally dynamic
+load_conf() { [[ -f $CONF_FILE ]] && . "$CONF_FILE"; return 0; }
+save_conf() {
+  cat >"$CONF_FILE" <<EOF
+# Written by ./omarchy-wsl2 - safe to edit or delete.
+CFG_NAME='$CFG_NAME'
+CFG_PROFILE='$CFG_PROFILE'
+CFG_THEME='$CFG_THEME'
+CFG_TOOLS='$CFG_TOOLS'
+CFG_REF='$CFG_REF'
+EOF
+}
+
+# ------------------------------------------------------------------- state ---
+# NOTE: </dev/null is essential. wsl.exe consumes stdin, which would otherwise
+# swallow the wizard's own menu input and make selections misbehave.
+wslx() { wsl.exe "$@" </dev/null 2>/dev/null | tr -d '\0'; }
+distro_exists() { wslx --list --quiet | sed 's/\r//' | grep -qx "$1"; }
+host_arch() { case "$(uname -m)" in x86_64|amd64) echo x86_64;; aarch64|arm64) echo aarch64;; *) uname -m;; esac; }
+
+wsl_version() { wslx --version | awk '/WSL version/{print $3}' | tr -d '\r'; }
+
+version_ge() { # version_ge A B  -> true if A >= B
+  printf '%s\n%s\n' "$2" "$1" | sort -V -C
+}
+
+image_path() { echo "/mnt/c/wsl/omarchy-wsl2/dist/${CFG_NAME}-${CFG_PROFILE}-$(host_arch).wsl"; }
+
+# ------------------------------------------------------------- prerequisites ---
+PREREQ_FAIL=0
+
+pkg_install_cmd() {
+  if command -v apt-get >/dev/null; then echo "sudo apt-get install -y"
+  elif command -v dnf >/dev/null; then echo "sudo dnf install -y"
+  elif command -v pacman >/dev/null; then echo "sudo pacman -S --noconfirm --needed"
+  elif command -v zypper >/dev/null; then echo "sudo zypper install -y"
+  else echo ""; fi
+}
+
+# Map a command to its package name for the host's package manager.
+pkg_for() {
+  local cmd=$1
+  if command -v pacman >/dev/null; then
+    case $cmd in python3) echo python;; *) echo "$cmd";; esac
+  else
+    case $cmd in python3) echo python3;; *) echo "$cmd";; esac
+  fi
+}
+
+check_prereqs() {
+  local fix=${1:-ask}
+  PREREQ_FAIL=0
+  title "Checking prerequisites"
+
+  # --- must be inside WSL, with interop ---
+  if [[ -e /proc/sys/fs/binfmt_misc/WSLInterop ]] || grep -qi microsoft /proc/version; then
+    ok "Running inside WSL"
+  else
+    bad "Not running inside WSL - run this from a WSL2 distro"
+    PREREQ_FAIL=1; return 1
+  fi
+
+  if command -v wsl.exe >/dev/null; then
+    ok "wsl.exe reachable (Windows interop enabled)"
+  else
+    bad "wsl.exe not found - enable interop in /etc/wsl.conf ([interop] enabled=true)"
+    PREREQ_FAIL=1; return 1
+  fi
+
+  # --- WSL version ---
+  local v; v=$(wsl_version)
+  if [[ -z $v ]]; then
+    warn "Could not read the WSL version"
+  elif version_ge "$v" "2.4.4"; then
+    ok "WSL $v (>= 2.4.4 required)"
+  else
+    bad "WSL $v is too old; 2.4.4+ is needed for .wsl distributions"
+    if [[ $fix != no ]] && confirm "Run 'wsl.exe --update' now?"; then
+      wsl.exe --update 2>&1 | tr -d '\0'
+      warn "You may need to run 'wsl.exe --shutdown' and re-open this shell"
+    else
+      PREREQ_FAIL=1
+    fi
+  fi
+
+  # --- architecture ---
+  local a; a=$(host_arch)
+  if [[ $a == x86_64 ]]; then
+    ok "Architecture x86_64 (fully supported)"
+  elif [[ $a == aarch64 ]]; then
+    warn "Architecture aarch64 - works, but Omarchy's package repo is x86_64-only"
+    note "See docs/08-arm64.md for the substitution list"
+  else
+    bad "Unsupported architecture: $a"; PREREQ_FAIL=1
+  fi
+
+  # --- host tools ---
+  local -a missing=()
+  local t
+  for t in curl tar gzip git make python3; do
+    command -v "$t" >/dev/null && ok "$t" || { bad "$t missing"; missing+=("$t"); }
+  done
+
+  if (( ${#missing[@]} )); then
+    local ic; ic=$(pkg_install_cmd)
+    if [[ -n $ic && $fix != no ]]; then
+      local -a pkgs=()
+      for t in "${missing[@]}"; do pkgs+=("$(pkg_for "$t")"); done
+      printf '\n'
+      note "Install with: $ic ${pkgs[*]}"
+      if confirm "Install the missing tools now?"; then
+        # shellcheck disable=SC2086
+        $ic "${pkgs[@]}" || { bad "Install failed"; PREREQ_FAIL=1; }
+      else
+        PREREQ_FAIL=1
+      fi
+    else
+      PREREQ_FAIL=1
+    fi
+  fi
+
+  # --- python imaging, for the .ico ---
+  if python3 -c 'import cairosvg, PIL' 2>/dev/null; then
+    ok "python cairosvg + Pillow (logo rendering)"
+  else
+    warn "python cairosvg/Pillow missing - needed to generate the Start-menu icon"
+    if [[ $fix != no ]] && confirm "Install them now?"; then
+      local ic; ic=$(pkg_install_cmd)
+      if command -v apt-get >/dev/null; then
+        $ic python3-cairosvg python3-pil 2>/dev/null \
+          || pip install --user --break-system-packages cairosvg Pillow
+      elif command -v pacman >/dev/null; then
+        $ic python-cairosvg python-pillow
+      else
+        pip install --user cairosvg Pillow
+      fi
+      python3 -c 'import cairosvg, PIL' 2>/dev/null \
+        && ok "installed" || warn "still missing - the build will ship without an icon"
+    fi
+  fi
+
+  # --- disk space ---
+  local need free_gb
+  case "$CFG_PROFILE" in headless) need=8;; apps) need=14;; *) need=18;; esac
+  free_gb=$(df -BG --output=avail /mnt/c 2>/dev/null | tail -1 | tr -dc '0-9')
+  if [[ -n $free_gb ]]; then
+    if (( free_gb >= need )); then
+      ok "Free space on C: ${free_gb}GB (need ~${need}GB for '$CFG_PROFILE')"
+    else
+      warn "Only ${free_gb}GB free on C:; '$CFG_PROFILE' wants ~${need}GB"
+    fi
+  fi
+
+  printf '\n'
+  (( PREREQ_FAIL == 0 )) && ok "${B}All prerequisites satisfied${R}" \
+                         || bad "${B}Some prerequisites are unmet${R}"
+  return $PREREQ_FAIL
+}
+
+check_windows_extras() {
+  title "Optional Windows-side extras"
+  note "These improve the experience but are not required to build."
+  printf '\n'
+
+  if command -v winget.exe >/dev/null 2>&1; then
+    ok "winget available"
+    if confirm "Install JetBrainsMono Nerd Font? (fixes icon glyphs in Windows Terminal)" N; then
+      winget.exe install --id DEVCOM.JetBrainsMonoNerdFont --accept-source-agreements --accept-package-agreements 2>&1 | tr -d '\0' | tail -3
+    fi
+    if confirm "Install Windows Terminal?" N; then
+      winget.exe install --id Microsoft.WindowsTerminal --accept-source-agreements --accept-package-agreements 2>&1 | tr -d '\0' | tail -3
+    fi
+    if confirm "Install VS Code (recommended: use with the WSL extension)?" N; then
+      winget.exe install --id Microsoft.VisualStudioCode --accept-source-agreements --accept-package-agreements 2>&1 | tr -d '\0' | tail -3
+    fi
+  else
+    warn "winget.exe not found - install these manually if you want them:"
+    note "JetBrainsMono Nerd Font, Windows Terminal, VS Code"
+  fi
+}
+
+# ------------------------------------------------------------------ status ---
+show_status() {
+  title "Current state"
+  printf '  %-22s %s\n' "Host architecture:" "$(host_arch)"
+  printf '  %-22s %s\n' "WSL version:" "$(wsl_version)"
+  printf '  %-22s %s\n' "Repo:" "$REPO_ROOT"
+
+  if distro_exists "$CFG_NAME"; then
+    ok "Distro '$CFG_NAME' is installed"
+    local prof theme
+    prof=$(wslx -d "$CFG_NAME" --cd / -- sh -c 'grep -s OMARCHY_WSL2_PROFILE /etc/os-release | cut -d= -f2 | tr -d \"' | tr -d '\r')
+    theme=$(wslx -d "$CFG_NAME" --cd / -- sh -c 'cat ~/.config/omarchy/current/theme.name 2>/dev/null' | tr -d '\r')
+    [[ -n $prof  ]] && printf '  %-22s %s\n' "Installed profile:" "$prof"
+    [[ -n $theme ]] && printf '  %-22s %s\n' "Active theme:" "$theme"
+  else
+    note "Distro '$CFG_NAME' is not installed yet"
+  fi
+
+  local img; img=$(image_path)
+  if [[ -s $img ]]; then
+    ok "Built image: $(basename "$img") ($(du -h "$img" | cut -f1))"
+  else
+    note "No built image for profile '$CFG_PROFILE' yet"
+  fi
+}
+
+# --------------------------------------------------------------- questions ---
+ask_profile() {
+  choose CFG_PROFILE "How do you want to run Omarchy?" \
+    "$(case $CFG_PROFILE in headless) echo 1;; apps) echo 2;; *) echo 3;; esac)" \
+    "headless|Headless|Terminal only. Neovim, lazygit, btop, themes. ~2GB. Rock solid." \
+    "apps|WSLg apps|Terminal + individual GUI apps as Windows windows. ~5GB." \
+    "desktop|Full desktop|Adds Hyprland, nested or over VNC. ~8GB. Experimental."
+}
+
+ask_theme() {
+  local -a opts=()
+  local i=1 def=1 t
+  local themes=(tokyo-night catppuccin gruvbox everforest kanagawa nord rose-pine matte-black osaka-jade)
+  local current="${CFG_THEME,,}"; current="${current// /-}"
+  for t in "${themes[@]}"; do
+    opts+=("$t|${t}|")
+    [[ $t == "$current" ]] && def=$i
+    ((i++))
+  done
+  local picked
+  choose picked "Which theme?" "$def" "${opts[@]}"
+  # Convert the slug back into the display name Omarchy expects.
+  CFG_THEME=$(echo "$picked" | tr '-' ' ' | awk '{for(j=1;j<=NF;j++) $j=toupper(substr($j,1,1)) substr($j,2)}1')
+}
+
+ask_tools() {
+  multiselect CFG_TOOLS "Which developer tools should be installed?" "$CFG_TOOLS" \
+    "learn|omarchy-learn|AI tutor for Omarchy/WSL2 questions (Copilot CLI + glow)" \
+    "gh|GitHub CLI|gh - auth, PRs, issues" \
+    "copilot|Copilot CLI|GitHub Copilot in the terminal" \
+    "mise|mise|Runtime version manager (node, python, go, ruby)" \
+    "docker|Docker|Native docker + compose inside the distro" \
+    "node|Node.js|node + npm" \
+    "python|Python|python, pip, uv" \
+    "rust|Rust|rustup toolchain" \
+    "go|Go|Go toolchain" \
+    "k8s|Kubernetes|kubectl, helm, k9s" \
+    "extras|Extras|httpie, yq, hyperfine, zellij, tokei"
+}
+
+do_learn() {
+  if ! distro_exists "$CFG_NAME"; then
+    bad "Distro '$CFG_NAME' is not installed yet."
+    return 1
+  fi
+
+  title "omarchy-learn - AI tutor for Omarchy & WSL2"
+  cat <<EOF
+  Ask plain-English questions and get answers grounded in the Omarchy source
+  and this project's docs, rendered as Markdown.
+
+    ${GREY}oml "how do I list the packages I have installed"${R}
+    ${GREY}oml "why can't I run the full Hyprland desktop"${R}
+
+  It uses the ${B}GitHub Copilot CLI${R} with the ${B}auto${R} model (Copilot picks the
+  cheapest suitable one). A GitHub Copilot subscription is required.
+EOF
+  printf '\n'
+  confirm "Install and configure omarchy-learn in '$CFG_NAME'?" || return 0
+
+  wsl.exe -d "$CFG_NAME" -u root --cd / -- \
+    /usr/local/bin/omarchy-wsl-devtools learn 2>&1 | tr -d '\0'
+
+  printf '\n'
+  if confirm "Run 'copilot login' now to authenticate?"; then
+    wsl.exe -d "$CFG_NAME" --cd / -- bash -lc 'copilot login'
+  fi
+
+  printf '\n'
+  if confirm "Ask a test question now?"; then
+    wsl.exe -d "$CFG_NAME" --cd / -- bash -lc \
+      'omarchy-learn "how do I list the packages I have installed"'
+  fi
+
+  ok "omarchy-learn ready - use 'oml \"your question\"' inside the distro"
+}
+
+# ------------------------------------------------------------------ actions ---
+run_make() {
+  printf '\n%s%s $ make %s%s\n\n' "$DIM" "$GREY" "$*" "$R"
+  make "$@"
+}
+
+do_build_install() {
+  title "Build a new Omarchy distro"
+
+  ask CFG_NAME "Distro name" "$CFG_NAME"
+  ask_profile
+  ask_theme
+  ask_tools
+  save_conf
+
+  title "Summary"
+  printf '  %-20s %s\n' "Distro name:"  "$CFG_NAME"
+  printf '  %-20s %s\n' "Profile:"      "$CFG_PROFILE"
+  printf '  %-20s %s\n' "Theme:"        "$CFG_THEME"
+  printf '  %-20s %s\n' "Dev tools:"    "${CFG_TOOLS:-none}"
+  printf '  %-20s %s\n' "Architecture:" "$(host_arch)"
+  printf '  %-20s %s\n' "Output:"       "$(image_path)"
+  printf '\n'
+  note "This downloads a base image and installs packages - expect 30-60 minutes."
+
+  if distro_exists "$CFG_NAME"; then
+    warn "A distro named '$CFG_NAME' already exists and will be REPLACED."
+  fi
+  confirm "Start the build?" || { note "Cancelled."; return 0; }
+
+  check_prereqs no || { bad "Fix the prerequisites first (menu option 1)."; return 1; }
+
+  local -a mkargs=(PROFILE="$CFG_PROFILE" NAME="$CFG_NAME"
+                   OMARCHY_THEME="$CFG_THEME" OMARCHY_REF="$CFG_REF")
+
+  run_make logo   "${mkargs[@]}" || { bad "Logo generation failed"; return 1; }
+  run_make fetch  "${mkargs[@]}" || { bad "Fetch failed"; return 1; }
+  run_make seed   "${mkargs[@]}" || { bad "Seed failed"; return 1; }
+  run_make build  "${mkargs[@]}" || { bad "Build failed"; return 1; }
+  run_make export "${mkargs[@]}" || { bad "Export failed"; return 1; }
+  run_make install "${mkargs[@]}" || { bad "Install failed"; return 1; }
+
+  [[ -n $CFG_TOOLS ]] && install_tools
+
+  title "Done"
+  ok "Omarchy is installed as '$CFG_NAME'"
+  printf '\n'
+  note "Start it with:      wsl -d $CFG_NAME"
+  note "Check readiness:    wsl -d $CFG_NAME -- omarchy-wsl-doctor"
+  [[ $CFG_PROFILE == desktop ]] && \
+    note "Launch the desktop: wsl -d $CFG_NAME -- omarchy-wsl-desktop"
+}
+
+install_tools() {
+  [[ -z $CFG_TOOLS ]] && { note "No tools selected."; return 0; }
+  distro_exists "$CFG_NAME" || { bad "Distro '$CFG_NAME' is not installed."; return 1; }
+
+  title "Installing developer tools into '$CFG_NAME'"
+  note "Selected: $CFG_TOOLS"
+  printf '\n'
+  wsl.exe -d "$CFG_NAME" -u root --cd / -- \
+    /usr/local/bin/omarchy-wsl-devtools "${CFG_TOOLS//,/ }" 2>&1 | tr -d '\0'
+}
+
+do_modify() {
+  if ! distro_exists "$CFG_NAME"; then
+    bad "Distro '$CFG_NAME' is not installed. Use option 2 to build it."
+    return 1
+  fi
+
+  local action
+  choose action "Modify '$CFG_NAME'" 1 \
+    "theme|Change theme|Apply a different Omarchy theme" \
+    "tools|Developer tools|Install or add tool bundles" \
+    "tier|Add a tier|Add GUI apps or the Hyprland desktop to the running distro" \
+    "update|Update|Run omarchy-update + pacman -Syu" \
+    "rebuild|Rebuild image|Rebuild from scratch (replaces the distro)" \
+    "back|Back|Return to the main menu"
+
+  case "$action" in
+    theme)
+      ask_theme; save_conf
+      title "Applying theme '$CFG_THEME'"
+      wsl.exe -d "$CFG_NAME" --cd / -- env \
+        OMARCHY_THEME_HEADLESS=1 OMARCHY_THEME_SKIP_BACKGROUND=1 \
+        omarchy-theme-set "$CFG_THEME" 2>&1 | tr -d '\0'
+      ok "Theme applied"
+      ;;
+    tools)
+      ask_tools; save_conf; install_tools
+      ;;
+    tier)
+      local tier
+      choose tier "Which tier?" 1 \
+        "apps|GUI apps|chromium, foot, nautilus, mpv, fonts, portals" \
+        "desktop|Hyprland desktop|hyprland, waybar, wofi, quickshell, wayvnc"
+      title "Installing the '$tier' tier into '$CFG_NAME'"
+      note "This installs into the live distro; it does not change the built image."
+      # Stage just the package lists and install them.
+      tar -cf - packages | wsl.exe -d "$CFG_NAME" -u root --cd / -- tar -C /tmp -xf -
+      wsl.exe -d "$CFG_NAME" -u root --cd / -- bash -c "
+        sed -e 's/#.*//' -e '/^[[:space:]]*\$/d' /tmp/packages/${tier}.packages \
+          | xargs -r -n1 sh -c 'pacman -S --noconfirm --needed \"\$0\" >/dev/null 2>&1 \
+              || echo \"  unavailable: \$0\"'
+      " 2>&1 | tr -d '\0'
+      ok "Tier '$tier' installed"
+      note "Re-run 'make all PROFILE=$tier' to bake it into the image permanently."
+      ;;
+    update)
+      title "Updating '$CFG_NAME'"
+      wsl.exe -d "$CFG_NAME" --cd / -- bash -lc 'omarchy-update || sudo pacman -Syu --noconfirm' 2>&1 | tr -d '\0'
+      ;;
+    rebuild)
+      confirm "This replaces '$CFG_NAME'. Continue?" N && do_build_install
+      ;;
+    back) return 0 ;;
+  esac
+}
+
+do_doctor() {
+  if distro_exists "$CFG_NAME"; then
+    title "Diagnostics for '$CFG_NAME'"
+    wsl.exe -d "$CFG_NAME" --cd / -- omarchy-wsl-doctor 2>&1 | tr -d '\0'
+  else
+    bad "Distro '$CFG_NAME' is not installed."
+  fi
+}
+
+do_docs() {
+  title "Documentation"
+  cat <<EOF
+  ${B}In this repo${R}
+    README.md                     Overview, diagrams, quick start
+    docs/01-architecture.md       Why upstream's installer can't run under WSL
+    docs/02-build.md              Makefile targets, tarball prep, registration
+    docs/03-modes.md              Headless / WSLg apps / full desktop
+    docs/04-getting-started.md    First 30 minutes
+    docs/05-theming.md            Themes, Windows Terminal, VS Code
+    docs/06-dev-tools.md          VS Code, Copilot CLI, mise, Docker
+    docs/07-ubuntu-users.md       Coming from Ubuntu? apt -> pacman
+    docs/08-arm64.md              Windows on ARM
+    docs/09-troubleshooting.md    Known failures and fixes
+    docs/10-reference.md          Variables, layout, links
+    docs/11-omarchy-learn.md      The built-in AI tutor (oml)
+
+  ${B}Upstream${R}
+    Omarchy manual                https://omarchy.org/manual/
+    Omarchy repo                  https://github.com/basecamp/omarchy
+    Build a custom WSL distro     https://learn.microsoft.com/windows/wsl/build-custom-distro
+    WSL dev environment           https://learn.microsoft.com/windows/wsl/setup/environment
+    Hyprland wiki                 https://wiki.hypr.land/
+EOF
+}
+
+do_uninstall() {
+  if ! distro_exists "$CFG_NAME"; then bad "'$CFG_NAME' is not installed."; return 1; fi
+  warn "This unregisters '$CFG_NAME' and deletes all data inside it."
+  confirm "Really uninstall '$CFG_NAME'?" N || { note "Cancelled."; return 0; }
+  run_make uninstall NAME="$CFG_NAME"
+  if confirm "Also delete build artefacts and the download cache?" N; then
+    run_make distclean NAME="$CFG_NAME"
+  fi
+}
+
+# -------------------------------------------------------------------- main ---
+main() {
+  load_conf
+  while true; do
+    banner
+    show_status
+
+    local action
+    choose action "What would you like to do?" 2 \
+      "prereq|Check prerequisites|Verify the host and offer to install what's missing" \
+      "build|Build & install|Create a new Omarchy WSL2 distro from scratch" \
+      "modify|Modify existing|Change theme, add tools or tiers, update" \
+      "learn|Set up omarchy-learn|AI tutor for Omarchy & WSL2 questions" \
+      "doctor|Diagnostics|Check WSLg, GPU, systemd and desktop readiness" \
+      "extras|Windows extras|Nerd Font, Windows Terminal, VS Code" \
+      "docs|Documentation|Where to read more" \
+      "uninstall|Uninstall|Remove the distro" \
+      "quit|Quit|Exit the wizard"
+
+    case "$action" in
+      prereq)    check_prereqs ask; pause ;;
+      build)     do_build_install; pause ;;
+      modify)    do_modify; pause ;;
+      learn)     do_learn; pause ;;
+      doctor)    do_doctor; pause ;;
+      extras)    check_windows_extras; pause ;;
+      docs)      do_docs; pause ;;
+      uninstall) do_uninstall; pause ;;
+      quit)      printf '\n  %sBye.%s\n\n' "$GREY" "$R"; exit 0 ;;
+    esac
+  done
+}
+
+main "$@"

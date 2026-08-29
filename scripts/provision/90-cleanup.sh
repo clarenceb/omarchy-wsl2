@@ -1,0 +1,70 @@
+#!/bin/bash
+# 90-cleanup.sh - shrink the image and satisfy Microsoft's packaging rules.
+#
+# Rules we are honouring (learn.microsoft.com/windows/wsl/build-custom-distro):
+#   * do NOT ship /etc/resolv.conf
+#   * DO keep a uid 0 root entry in /etc/passwd
+#   * no password hashes in /etc/shadow
+#   * no kernel or initramfs in the archive
+set -euo pipefail
+
+info "Restoring pacman's normal security posture"
+# The sandbox was only disabled so the image could be built unprivileged.
+sed -i 's/^#\(DownloadUser\)/\1/' /etc/pacman.conf || true
+sed -i '/^DisableSandbox$/d' /etc/pacman.conf || true
+
+info "Clearing the package cache"
+pacman -Scc --noconfirm >/dev/null 2>&1 || true
+rm -rf /var/cache/pacman/pkg/* /var/lib/pacman/sync/* 2>/dev/null || true
+
+info "Removing build staging and logs"
+# NOTE: /tmp/omarchy-wsl2-src is this script's own location, so it is removed
+# by scripts/provision.sh after main.sh returns, not here.
+rm -rf /root/.cache /home/*/.cache 2>/dev/null || true
+find /var/log -type f -exec truncate -s 0 {} + 2>/dev/null || true
+
+info "Shutting down gpg-agent and removing its sockets"
+# tar cannot archive unix sockets; leaving them makes `wsl --export` warn.
+gpgconf --kill all >/dev/null 2>&1 || true
+find /etc/pacman.d/gnupg /root/.gnupg -type s -delete 2>/dev/null || true
+
+info "Removing /etc/resolv.conf (WSL generates it)"
+rm -f /etc/resolv.conf
+
+info "Clearing machine-id so each install gets its own"
+: >/etc/machine-id
+rm -f /var/lib/dbus/machine-id
+ln -sf /etc/machine-id /var/lib/dbus/machine-id
+
+info "Verifying no password hashes ship in the image"
+if awk -F: 'length($2) > 1 && $2 !~ /^[!*]/ {print $1}' /etc/shadow | grep -q .; then
+  info "WARNING: password hashes present:"
+  awk -F: 'length($2) > 1 && $2 !~ /^[!*]/ {print "    " $1}' /etc/shadow
+fi
+
+info "Verifying a uid 0 root entry exists"
+getent passwd 0 >/dev/null || die "no uid 0 entry in /etc/passwd"
+
+info "Verifying no kernel/initramfs is present"
+if compgen -G '/boot/vmlinuz*' >/dev/null || compgen -G '/boot/initramfs*' >/dev/null; then
+  info "Removing bootloader artefacts from /boot"
+  rm -f /boot/vmlinuz* /boot/initramfs* /boot/initrd* 2>/dev/null || true
+fi
+
+info "Verifying required config files"
+for f in /etc/wsl.conf /etc/wsl-distribution.conf /etc/oobe.sh; do
+  [[ -f $f ]] || die "missing $f"
+done
+[[ $(stat -c '%U:%G %a' /etc/wsl.conf) == "root:root 644" ]] \
+  || die "/etc/wsl.conf must be root:root 0644"
+[[ $(stat -c '%U:%G %a' /etc/wsl-distribution.conf) == "root:root 644" ]] \
+  || die "/etc/wsl-distribution.conf must be root:root 0644"
+
+if [[ -f /var/log/omarchy-wsl2-missing.log ]]; then
+  info "Packages that were unavailable on $TARGET_ARCH:"
+  sort -u /var/log/omarchy-wsl2-missing.log | sed 's/^/    /'
+fi
+
+info "Image size: $(du -shx --exclude=/mnt --exclude=/proc --exclude=/sys \
+  --exclude=/dev --exclude=/run / 2>/dev/null | cut -f1)"
+info "Cleanup complete"

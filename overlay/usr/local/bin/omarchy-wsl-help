@@ -1,0 +1,47 @@
+#!/bin/bash
+# omarchy-wsl-help - the cheat sheet shown after install.
+
+cat <<'EOF'
+
+  omarchy-wsl2 - Omarchy on WSL2
+
+  MODE 1  Headless (terminal only)
+    wsl -d omarchy                 open a shell from Windows
+    fastfetch                      system summary
+    lazygit / btop / nvim          the Omarchy TUI staples
+
+  MODE 2  Individual GUI apps via WSLg
+    omarchy-wsl-app chromium       run one app as a Windows window
+    omarchy-wsl-app foot           Omarchy's terminal
+    (GUI apps also work directly once you have logged in interactively)
+
+  MODE 3  Full Hyprland desktop
+    omarchy-wsl-desktop            nested inside WSLg (one window)
+    omarchy-wsl-desktop vnc        headless + VNC on 127.0.0.1:5900
+    omarchy-wsl-desktop vnc --size 2560x1440 --port 5901
+
+  THEMING
+    omarchy-theme-set "Tokyo Night"      switch theme
+    omarchy-theme-list                   what is available
+    ~/.config/omarchy/                   your overrides
+
+  DIAGNOSTICS
+    omarchy-wsl-doctor             check WSLg / GPU / systemd / Hyprland
+
+  LEARN
+    oml "how do I change theme"    ask the built-in Omarchy/WSL2 tutor
+    omarchy-learn --check          verify Copilot CLI + auth
+    omarchy-learn --topics         suggested starter questions
+
+  DEV TOOLS
+    sudo omarchy-wsl-devtools gh mise docker
+    sudo omarchy-wsl-devtools --list
+
+  WINDOWS INTEROP
+    explorer.exe .                 open the current dir in File Explorer
+    code .                         open VS Code (WSL remote)
+    wsl.exe --shutdown             (from Windows) restart the VM
+
+  Docs: https://omarchy.org/manual/  and  ./docs in this repo
+
+EOF
