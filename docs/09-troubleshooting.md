@@ -402,3 +402,38 @@ tail -50 ~/.local/share/hyprland/hyprland.log
 Upstream Omarchy questions belong at
 [basecamp/omarchy](https://github.com/basecamp/omarchy/issues) — but note that
 WSL is not supported upstream ([#469](https://github.com/basecamp/omarchy/issues/469)).
+
+### Interop breaks in OTHER distros (`wsl.exe: Exec format error`)
+
+After running an Omarchy shell, Windows interop stops working **everywhere** —
+`notepad.exe`, `code .` and even `wsl.exe` fail from Ubuntu with:
+
+```
+/mnt/c/Windows/system32/wsl.exe: cannot execute binary file: Exec format error
+```
+
+```bash
+ls /proc/sys/fs/binfmt_misc/    # only 'register' and 'status' - all entries gone
+```
+
+**Cause:** `systemd-binfmt.service` ships
+
+```
+ExecStop=/usr/lib/systemd/systemd-binfmt --unregister
+```
+
+which flushes **every** `binfmt_misc` entry, including WSL's own `WSLInterop`
+handler. Because all distros share one kernel, stopping this distro breaks
+interop for every other distro until the next `wsl --shutdown`.
+
+**Fix** (images built after this was found already mask it):
+
+```bash
+sudo systemctl mask systemd-binfmt.service
+```
+
+then from Windows:
+
+```powershell
+wsl --shutdown
+```

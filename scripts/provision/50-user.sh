@@ -1,13 +1,16 @@
 #!/bin/bash
-# 50-user.sh - create the default Omarchy user at uid 1000.
+# 50-user.sh - create the default Omarchy user.
 #
-# Microsoft's guidance: if the OOBE creates a user, both the account uid and
-# [oobe] defaultUid must be 1000. We bake the account in so first boot is fast,
+# Microsoft's guidance: if the OOBE creates a user, the account uid and
+# [oobe] defaultUid must match. We bake the account in so first boot is fast,
 # and oobe.sh simply adopts it.
+#
+# The uid is OMARCHY_UID (default 1001, not 1000) because WSL2 shares one
+# cgroup namespace across distros - see the comment in main.sh.
 set -euo pipefail
 
-# Arch Linux ARM images ship a stock 'alarm' user; get rid of it so uid 1000
-# is free.
+# Arch Linux ARM images ship a stock 'alarm' user; get rid of it so the uid
+# we want is free.
 if id alarm >/dev/null 2>&1; then
   info "Removing the stock Arch Linux ARM 'alarm' user"
   userdel -r alarm >/dev/null 2>&1 || true

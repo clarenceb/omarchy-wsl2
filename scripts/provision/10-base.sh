@@ -45,4 +45,14 @@ do
   systemctl mask "$unit" >/dev/null 2>&1 || true
 done
 
+# systemd-binfmt.service ships:
+#     ExecStop=/usr/lib/systemd/systemd-binfmt --unregister
+# which flushes EVERY binfmt_misc entry - including WSL's own WSLInterop
+# handler. binfmt_misc is shared by all distros in the WSL VM, so stopping this
+# distro silently breaks `notepad.exe`, `code .` and even `wsl.exe` in every
+# OTHER distro until the next `wsl --shutdown`. Mask it: nothing in this image
+# needs custom binfmt registrations.
+info "Masking systemd-binfmt.service (its ExecStop breaks WSL interop globally)"
+systemctl mask systemd-binfmt.service >/dev/null 2>&1 || true
+
 info "Base tier installed"

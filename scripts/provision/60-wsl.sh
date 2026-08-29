@@ -10,6 +10,10 @@ install -m 0644 -o root -g root "$SRC_DIR/wsl/wsl-distribution.conf" /etc/wsl-di
 # Keep the default user in wsl.conf in step with the account we actually made.
 sed -i -E "s/^default=.*/default=${OMARCHY_USER}/" /etc/wsl.conf
 
+# oobe.defaultUid MUST match the baked account, or WSL starts the first shell
+# as the wrong user. OMARCHY_UID is not always 1000 - see main.sh.
+sed -i -E "s/^defaultUid = .*/defaultUid = ${OMARCHY_UID}/" /etc/wsl-distribution.conf
+
 info "Installing the OOBE script"
 install -m 0755 -o root -g root "$SRC_DIR/wsl/oobe.sh" /etc/oobe.sh
 

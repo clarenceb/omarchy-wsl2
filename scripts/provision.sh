@@ -46,6 +46,7 @@ wsl.exe -d "$BUILD_DISTRO" -u root --cd / -- \
       OMARCHY_REPO="${OMARCHY_REPO:-basecamp/omarchy}" \
       OMARCHY_THEME="${OMARCHY_THEME:-Tokyo Night}" \
       OMARCHY_USER="${OMARCHY_USER:-omarchy}" \
+      OMARCHY_UID="${OMARCHY_UID:-1001}" \
       /bin/bash "$STAGE/scripts/provision/main.sh" </dev/null \
   || die "Provisioning failed. Inspect with: wsl -d $BUILD_DISTRO -u root"
 

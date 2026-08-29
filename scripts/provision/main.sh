@@ -17,7 +17,14 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 export PROFILE="${OMARCHY_WSL_PROFILE:-desktop}"
 export OMARCHY_USER="${OMARCHY_USER:-omarchy}"
-export OMARCHY_UID=1000
+# WSL2 runs every distro in ONE VM sharing a single cgroup namespace, so the
+# per-user systemd manager lives at the same path in all of them:
+#   /sys/fs/cgroup/user.slice/user-<uid>.slice/user@<uid>.service
+# If another running distro (e.g. Ubuntu) already has user@1000.service, this
+# distro's attempt fails with:
+#   user@1000.service: Failed to spawn executor: Device or resource busy
+# Defaulting to 1001 keeps us clear of the near-universal 1000.
+export OMARCHY_UID="${OMARCHY_UID:-1001}"
 export OMARCHY_REF="${OMARCHY_REF:-master}"
 export OMARCHY_REPO="${OMARCHY_REPO:-basecamp/omarchy}"
 export OMARCHY_THEME="${OMARCHY_THEME:-Tokyo Night}"

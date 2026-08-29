@@ -35,25 +35,32 @@ if [[ -d /run/systemd/system ]]; then
   else
     no "systemd user session failed (user@$(id -u).service)"
 
-    # Docker Desktop's WSL integration bind-mounts into the distro and leaves
-    # PID 0 "ghost" entries in the cgroup tree. cgroup v2 then refuses
-    # clone3(CLONE_INTO_CGROUP) with EBUSY, and systemd only retries on
-    # ENOSYS/EOPNOTSUPP - so the user manager never starts.
+    # WSL2 runs every distro in one VM sharing a single cgroup namespace, so
+    # user@<uid>.service resolves to the same cgroup path everywhere. If
+    # another running distro already owns that uid, this one gets EBUSY.
+    myuid=$(id -u)
+    if journalctl -u user@"$myuid".service -n 20 --no-pager 2>/dev/null \
+         | grep -q 'Failed to spawn executor'; then
+      printf '      Symptom: clone3(CLONE_INTO_CGROUP) returning EBUSY\n'
+      printf '      Cause:   another running WSL distro already owns uid %s.\n' "$myuid"
+      printf '               WSL2 shares one cgroup namespace across all distros.\n'
+      printf '      Fix A:   wsl.exe --shutdown, then start ONLY this distro\n'
+      printf '      Fix B:   rebuild with a distinct uid:\n'
+      printf '                 make all OMARCHY_UID=1002\n'
+      printf '      Impact:  modes 1 and 2 still work; user units (mode 3) do not\n'
+    fi
+
+    # Docker Desktop's WSL integration is a second, independent trigger: it
+    # leaves PID 0 "ghost" entries in the cgroup tree, which also yields EBUSY.
     ddesktop=0
     [[ -d /mnt/wsl/docker-desktop-bind-mounts ]] && ddesktop=1
     grep -qs docker-desktop /proc/mounts && ddesktop=1
     if (( ddesktop )); then
-      no "Docker Desktop WSL integration detected - this is the usual cause"
+      no "Docker Desktop WSL integration is also enabled - another known cause"
       printf '      Fix: Docker Desktop > Settings > Resources > WSL Integration\n'
       printf '           turn it OFF for this distro, then run: wsl --shutdown\n'
-      printf '      See docs/09-troubleshooting.md\n'
     fi
-
-    if journalctl -u user@"$(id -u)".service -n 20 --no-pager 2>/dev/null \
-         | grep -q 'Failed to spawn executor'; then
-      printf '      Symptom: clone3(CLONE_INTO_CGROUP) returning EBUSY\n'
-      printf '      Impact:  modes 1 and 2 still work; user units (mode 3) do not\n'
-    fi
+    printf '      See docs/09-troubleshooting.md\n'
   fi
 fi
 

@@ -4,13 +4,17 @@
 # Contract (see https://learn.microsoft.com/windows/wsl/build-custom-distro):
 #   * runs once, on the first interactive shell
 #   * a NON-ZERO exit means WSL refuses to open a shell -> always exit 0
-#   * must line up with `[oobe] defaultUid = 1000` in wsl-distribution.conf
+#   * must line up with `[oobe] defaultUid` in wsl-distribution.conf
 #
 # NOTE: this is Arch. `adduser` does not exist here - we use useradd/usermod.
 
 set -u
 
-DEFAULT_UID=1000
+# Read the uid the image was actually built with rather than assuming 1000;
+# WSL2's shared cgroup namespace means we often use 1001. See docs.
+DEFAULT_UID=$(sed -n 's/^defaultUid[[:space:]]*=[[:space:]]*\([0-9]\+\).*/\1/p' \
+  /etc/wsl-distribution.conf 2>/dev/null | head -1)
+DEFAULT_UID=${DEFAULT_UID:-1000}
 DEFAULT_GROUPS='wheel'
 STATE_DIR=/var/lib/omarchy-wsl2
 
@@ -73,7 +77,7 @@ main() {
   [[ -t 0 ]] && interactive=1
 
   if getent passwd "$DEFAULT_UID" >/dev/null; then
-    # The image already bakes in an 'omarchy' user at uid 1000.
+    # The image already bakes in an 'omarchy' user at DEFAULT_UID.
     local name
     name=$(getent passwd "$DEFAULT_UID" | cut -d: -f1)
     echo "Using the preconfigured account '${name}'."

@@ -26,6 +26,8 @@ OMARCHY_REF   ?= master
 OMARCHY_REPO  ?= basecamp/omarchy
 OMARCHY_THEME ?= Tokyo Night
 OMARCHY_USER  ?= omarchy
+# 1001 avoids colliding with the near-universal uid 1000 of other WSL distros.
+OMARCHY_UID   ?= 1001
 
 # Large artefacts live on the Windows drive: wsl.exe needs Windows paths for
 # --import/--export, and NTFS avoids a 9p round-trip for multi-GB files.
@@ -35,7 +37,7 @@ BUILD_DIR     ?= $(WIN_ROOT)/build
 DIST_DIR      ?= $(WIN_ROOT)/dist
 OUT_NAME      ?= $(NAME)-$(PROFILE)-$(ARCH)
 
-export ARCH OMARCHY_REF OMARCHY_REPO OMARCHY_THEME OMARCHY_USER
+export ARCH OMARCHY_REF OMARCHY_REPO OMARCHY_THEME OMARCHY_USER OMARCHY_UID
 
 S := ./scripts
 
