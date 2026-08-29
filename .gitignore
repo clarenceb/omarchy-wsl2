@@ -17,3 +17,4 @@ assets/*.ico
 .idea/
 .vscode/
 .omarchy-wsl2.conf
+assets/wallpapers/*.png

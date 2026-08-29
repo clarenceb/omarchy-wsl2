@@ -105,6 +105,7 @@ check:
 .PHONY: logo
 logo:
 	@python3 $(S)/make-logo.py
+	@python3 $(S)/make-wallpaper.py
 
 assets/omarchy-wsl2.ico: assets/logo.svg
 	@python3 $(S)/make-logo.py
