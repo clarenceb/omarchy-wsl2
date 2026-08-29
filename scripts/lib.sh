@@ -21,6 +21,34 @@ wslx() { wsl.exe "$@" 2>&1 | tr -d '\0'; }
 require_wsl_host() {
   command -v wsl.exe >/dev/null 2>&1 \
     || die "wsl.exe not found. Run this from inside a WSL2 distro on Windows."
+
+  # Existing is not enough - it must actually execute. binfmt_misc is shared
+  # across the whole WSL VM, and some distros' systemd-binfmt.service runs
+  #     ExecStop=/usr/lib/systemd/systemd-binfmt --unregister
+  # on shutdown, which flushes WSL's own WSLInterop handler. Every .exe then
+  # fails with exit 126 ("cannot execute binary file: Exec format error").
+  local rc=0
+  wsl.exe --version >/dev/null 2>&1 || rc=$?
+  if (( rc != 0 )); then
+    if (( rc == 126 )) || [[ ! -e /proc/sys/fs/binfmt_misc/WSLInterop ]]; then
+      printf '\n'
+      warn "Windows interop is broken in this distro (wsl.exe exits $rc)."
+      warn "The WSLInterop binfmt_misc handler has been unregistered."
+      printf '\n'
+      printf '  This happens when another distro stops and its\n'
+      printf '  systemd-binfmt.service unregisters every binfmt entry.\n'
+      printf '\n'
+      printf '  Fix, from a Windows PowerShell prompt:\n'
+      printf '      wsl --shutdown\n'
+      printf '  then reopen this terminal and re-run.\n'
+      printf '\n'
+      printf '  To stop it recurring, in each Arch/Omarchy distro:\n'
+      printf '      sudo systemctl mask systemd-binfmt.service\n'
+      printf '\n'
+      die "Cannot continue without Windows interop."
+    fi
+    die "wsl.exe failed to run (exit $rc)."
+  fi
 }
 
 # WSL >= 2.4.4 is required for tar-based .wsl distros and [oobe] support.

@@ -152,7 +152,14 @@ CFG_TOOLS=""
 CFG_REF=master
 
 # shellcheck disable=SC1090  # config path is intentionally dynamic
-load_conf() { [[ -f $CONF_FILE ]] && . "$CONF_FILE"; return 0; }
+load_conf() {
+  [[ -f $CONF_FILE ]] && . "$CONF_FILE"
+  # Guard against a corrupted config: a bad CFG_NAME silently becomes the
+  # default distro name and the image filename.
+  [[ $CFG_NAME =~ ^[A-Za-z][A-Za-z0-9._-]*$ ]] || CFG_NAME=omarchy
+  case "$CFG_PROFILE" in headless|apps|desktop) ;; *) CFG_PROFILE=desktop ;; esac
+  return 0
+}
 save_conf() {
   cat >"$CONF_FILE" <<EOF
 # Written by ./omarchy-wsl2 - safe to edit or delete.
@@ -224,7 +231,18 @@ check_prereqs() {
   fi
 
   if command -v wsl.exe >/dev/null; then
-    ok "wsl.exe reachable (Windows interop enabled)"
+    # Present is not the same as working: binfmt_misc is shared across the WSL
+    # VM, and a distro's systemd-binfmt.service unregisters every handler on
+    # shutdown - including WSLInterop. Every .exe then exits 126.
+    if wsl.exe --version >/dev/null 2>&1; then
+      ok "wsl.exe reachable (Windows interop enabled)"
+    else
+      bad "wsl.exe found but cannot execute (Windows interop is broken)"
+      note "From a Windows PowerShell prompt run:  wsl --shutdown"
+      note "then reopen this terminal. To prevent it recurring, run inside"
+      note "each Arch/Omarchy distro:  sudo systemctl mask systemd-binfmt.service"
+      PREREQ_FAIL=1; return 1
+    fi
   else
     bad "wsl.exe not found - enable interop in /etc/wsl.conf ([interop] enabled=true)"
     PREREQ_FAIL=1; return 1
@@ -462,7 +480,17 @@ run_make() {
 do_build_install() {
   title "Build a new Omarchy distro"
 
-  ask CFG_NAME "Distro name" "$CFG_NAME"
+  # Validate rather than trust: a stray menu keystroke once persisted "10" as
+  # the distro name into .omarchy-wsl2.conf, which then became the default.
+  while true; do
+    ask CFG_NAME "Distro name" "$CFG_NAME"
+    if [[ $CFG_NAME =~ ^[A-Za-z][A-Za-z0-9._-]*$ ]]; then
+      break
+    fi
+    bad "Invalid name '$CFG_NAME'. Start with a letter; use letters, digits, . _ -"
+    CFG_NAME=omarchy
+  done
+
   ask_profile
   ask_theme
   ask_tools
