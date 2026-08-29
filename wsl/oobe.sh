@@ -30,6 +30,36 @@ banner() {
 '
 }
 
+# Rename the baked-in account to a name the user picks. Renaming (rather than
+# delete + create) keeps the uid, home contents and Omarchy dotfiles intact.
+rename_user() {
+  local old="$1" new=""
+  while true; do
+    read -r -p 'Enter your preferred username: ' new || return 1
+    [[ -z $new ]] && return 1
+    if [[ ! $new =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+      warn "Invalid username. Use lowercase letters, digits, '-' and '_'."
+      continue
+    fi
+    [[ $new == "$old" ]] && return 0
+    if getent passwd "$new" >/dev/null; then
+      warn "User '$new' already exists."
+      continue
+    fi
+
+    if usermod -l "$new" -d "/home/$new" -m "$old" 2>/dev/null; then
+      groupmod -n "$new" "$old" 2>/dev/null || true
+      # Omarchy's config and this project's helpers live under the home dir,
+      # which usermod -m has already moved; just fix any stale ownership.
+      chown -R "$new":"$new" "/home/$new" 2>/dev/null || true
+      echo "Renamed '$old' -> '$new'."
+      return 0
+    fi
+    warn "Could not rename to '$new'."
+    return 1
+  done
+}
+
 create_user() {
   local username
   echo 'Create your Omarchy user account.'
@@ -83,6 +113,21 @@ main() {
     echo "Using the preconfigured account '${name}'."
 
     if (( interactive )); then
+      echo
+      echo "This image ships a ready-made account: '${name}'."
+      echo "You can keep it, or create your own username instead."
+      echo
+      printf "Keep '%s'? [Y/n] " "$name"
+      local keep=""
+      read -r -t 60 keep || keep=y
+      if [[ ${keep,,} == n* ]]; then
+        if rename_user "$name"; then
+          name=$(getent passwd "$DEFAULT_UID" | cut -d: -f1)
+        else
+          warn "Keeping '${name}'."
+        fi
+      fi
+
       echo
       echo "sudo is already passwordless for this account."
       printf "Set a login password for '%s' anyway? [y/N] " "$name"

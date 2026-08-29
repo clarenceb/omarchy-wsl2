@@ -304,17 +304,122 @@ def ask_choice(prompt: str, options: list[str], default: str) -> str:
 
 
 # ------------------------------------------------------------------ icon ---
+def windows_fonts() -> list[str]:
+    """Font filenames installed on the Windows side (machine + per-user)."""
+    names: list[str] = []
+    for base in ("/mnt/c/Windows/Fonts",):
+        try:
+            names += [p.name for p in Path(base).iterdir()]
+        except OSError:
+            pass
+    local = windows_env("LOCALAPPDATA")
+    if local:
+        d = to_wsl_path(f"{local}\\Microsoft\\Windows\\Fonts")
+        if d:
+            try:
+                names += [p.name for p in d.iterdir()]
+            except OSError:
+                pass
+    return names
+
+
+def has_nerd_font(face: str) -> bool:
+    """Is a font providing Nerd Font glyphs installed on Windows?
+
+    Windows Terminal renders with WINDOWS fonts, so a Nerd Font inside the
+    distro does nothing. Without one, Omarchy's prompt and eza icons render
+    as tofu boxes.
+    """
+    key = face.lower().replace(" ", "").replace("nerdfont", "").replace("nf", "")
+    key = key.strip() or "jetbrainsmono"
+    installed = [n.lower().replace(" ", "") for n in windows_fonts()]
+    for n in installed:
+        if key in n and ("nerd" in n or n.endswith("nf.ttf") or "nfm" in n):
+            return True
+    return False
+
+
+def offer_nerd_font(face: str) -> None:
+    """Warn when the chosen face has no Nerd Font on Windows, and offer winget."""
+    if has_nerd_font(face):
+        ok(f"Nerd Font available on Windows for '{face}'")
+        return
+
+    warn(f"No Nerd Font found on Windows matching '{face}'.")
+    note("Windows Terminal renders with Windows fonts, so Omarchy's prompt and")
+    note("eza icons will show as boxes until one is installed.")
+
+    pkgs = {
+        "JetBrainsMono Nerd Font": "DEVCOM.JetBrainsMonoNerdFont",
+        "Hack Nerd Font": "SourceFoundry.HackFonts",
+        "CaskaydiaCove Nerd Font": "DEVCOM.CascadiaCodeNerdFont",
+    }
+    print()
+    faces = list(pkgs)
+    for i, f in enumerate(faces, 1):
+        print(f"    {_c('36', str(i) + ')')} {f}  {_c('90', pkgs[f])}")
+    print(f"    {_c('36', '0)')} skip")
+
+    try:
+        sel = input(f"  Install one now? [{_c('90', '1')}]: ").strip() or "1"
+    except EOFError:
+        print()
+        return
+    if sel == "0":
+        note("Skipped. Install later with:")
+        note("  winget install --id DEVCOM.JetBrainsMonoNerdFont")
+        return
+
+    try:
+        chosen = faces[int(sel) - 1]
+    except (ValueError, IndexError):
+        chosen = faces[0]
+
+    note(f"Installing {chosen}...")
+    try:
+        subprocess.run(["winget.exe", "install", "--id", pkgs[chosen],
+                        "--accept-source-agreements", "--accept-package-agreements"],
+                       timeout=600, cwd="/mnt/c")
+        ok(f"{chosen} installed - restart Windows Terminal to pick it up")
+    except FileNotFoundError:
+        bad("winget.exe not found. Download from https://www.nerdfonts.com/font-downloads")
+    except subprocess.TimeoutExpired:
+        warn("winget timed out; check the install manually")
+
+
 def install_icon(distro: str) -> str | None:
     """Copy the project icon somewhere Windows Terminal can always read it."""
-    src = None
-    for cand in (Path("/usr/lib/wsl/omarchy-wsl2.ico"),
-                 Path(__file__).resolve().parent.parent.parent.parent / "assets/omarchy-wsl2.ico",
-                 Path.cwd() / "assets/omarchy-wsl2.ico"):
-        if cand.is_file():
-            src = cand
-            break
-
     local = windows_env("LOCALAPPDATA")
+
+    # An icon already staged on the Windows side is the most reliable option:
+    # it stays readable even when the distro is stopped.
+    if local:
+        staged_win = f"{local}\\omarchy-wsl2\\omarchy-wsl2.ico"
+        staged = to_wsl_path(staged_win)
+        if staged and staged.is_file():
+            return staged_win
+
+    src = None
+    here = Path(__file__).resolve()
+    candidates = [
+        Path("/usr/lib/wsl/omarchy-wsl2.ico"),          # inside the distro
+        here.parent.parent.parent.parent / "assets/omarchy-wsl2.ico",  # repo overlay
+        Path.cwd() / "assets/omarchy-wsl2.ico",
+        # Reachable when this runs from another distro (e.g. Ubuntu).
+        Path(f"/mnt/wsl/{distro}/usr/lib/wsl/omarchy-wsl2.ico"),
+    ]
+    # Walk up from the script looking for a repo checkout.
+    for parent in here.parents:
+        candidates.append(parent / "assets/omarchy-wsl2.ico")
+
+    for cand in candidates:
+        try:
+            if cand.is_file():
+                src = cand
+                break
+        except OSError:
+            continue
+
     if src and local:
         dest_dir_win = f"{local}\\omarchy-wsl2"
         dest_dir = to_wsl_path(dest_dir_win)
@@ -541,9 +646,7 @@ def main() -> int:
          f"{defaults['font_size']}pt")
     print()
     note("Windows Terminal picks up changes immediately - open a new tab to see it.")
-    if str(defaults["font_face"]).startswith("JetBrainsMono"):
-        note("If glyphs look wrong, install the font on Windows:")
-        note("  winget install --id DEVCOM.JetBrainsMonoNerdFont")
+    offer_nerd_font(str(defaults["font_face"]))
     print()
     note("Undo with: omarchy-wsl-wt --restore")
     return 0
