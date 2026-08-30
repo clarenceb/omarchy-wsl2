@@ -320,6 +320,26 @@ Current builds keep them. On an affected image:
 sudo pacman -Sy --needed <package>
 ```
 
+### I'm stuck in TigerVNC's full screen
+
+Press **`F8`** for the popup menu, then click *Full screen* or press `f`.
+
+**TigerVNC 1.16+** replaced the F8 menu key: use **`Ctrl+M`**, **`Alt+M`** or
+**`⊞+M`** instead. Some builds also toggle directly with
+**`Ctrl+Alt+Enter`**. On laptops with shared function keys, try **`Fn+F8`**.
+Check which you have with `vncviewer --version`.
+
+Failing all of that, `Alt+Tab` from another monitor still works, and closing
+the viewer leaves the sway session running — reconnect any time.
+
+### `SUPER` keybindings work over VNC but not in the nested window
+
+Expected. WSLg's compositor claims many `SUPER` combinations before sway ever
+sees them. VNC owns its own input stack, so nothing intercepts.
+
+This is also why nested mode auto-launches a terminal: without it, a user
+whose `SUPER+Return` is being swallowed has no way to open the first window.
+
 ### `No supported buffer formats were found` from wayvnc
 
 Harmless, and not a sign that VNC is broken — sessions render normally.

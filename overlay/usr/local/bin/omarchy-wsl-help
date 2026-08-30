@@ -22,6 +22,10 @@ cat <<'EOF'
     omarchy-wsl-desktop --floating draggable windows with titlebars
     omarchy-wsl-desktop --tiling   back to Omarchy's tiling model
 
+    In TigerVNC, F8 opens the menu (Ctrl+M / Alt+M on 1.16+) - use it to
+    leave full screen. VNC is usually the better mode: SUPER keys work,
+    and it composites once instead of twice.
+
   KEYS IN THE DESKTOP   (SUPER = the Windows key)
     New to tiling? These five are enough to get started:
       SUPER+Return      open a terminal

@@ -278,9 +278,20 @@ ever be as big as that window.
    & "C:\Program Files\TigerVNC\vncviewer.exe" -FullScreen 127.0.0.1:5900
    ```
 
-   `F8` in-session opens TigerVNC's menu to toggle full screen or disconnect.
-   For multi-monitor, `F8` → Options → Screen → "Full screen mode: All
-   monitors", with `--size` set to the combined width.
+   **To get back out of full screen**, press **`F8`** for TigerVNC's popup
+   menu, then click *Full screen* or press `f`. On **TigerVNC 1.16+** the
+   shortcut changed — use **`Ctrl+M`**, **`Alt+M`** or **`⊞+M`** for the menu;
+   some builds also toggle directly with **`Ctrl+Alt+Enter`**. On a laptop
+   with shared function keys you may need **`Fn+F8`**.
+
+   For multi-monitor, open that menu → Options → Screen → "Full screen mode:
+   All monitors", with `--size` set to the combined width.
+
+> **Why VNC often feels better than nested.** Two reasons. Nested mode
+> composites twice — sway into WSLg, WSLg into Windows — while VNC renders
+> once and ships pixels. And WSLg claims `SUPER` combinations before sway
+> sees them, so keybindings that silently fail in a nested window work
+> normally over VNC.
 
 > **Performance note.** Everything is CPU-rendered, so higher resolutions cost
 > real frame time. If 1440p feels sluggish, run `--size 1920x1080` and let
