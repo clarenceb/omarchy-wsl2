@@ -195,8 +195,11 @@ case "$MODE" in
     export WLR_WL_OUTPUTS=1
 
     echo "Starting the desktop nested in WSLg (host socket: $WAYLAND_DISPLAY)..."
-    echo "The window has no titlebar; use Win+Up / Win+Left / Win+Right to size it,"
-    echo "or --size WxH. Close the window, or press SUPER+SHIFT+E, to exit."
+    echo "The window has no titlebar - WSLg offers no decoration protocol, so"
+    echo "there is nothing to drag. To move it: Shift+right-click its taskbar"
+    echo "button, choose Move, then use the arrow keys. Win+Up / Win+Left /"
+    echo "Win+Right snap it; --size WxH sets it up front."
+    echo "Close the window, or press SUPER+SHIFT+E, to exit."
 
     # The host window carries no titlebar: sway requests client-side
     # decorations and draws none, and WSLg does not add its own. Its size is

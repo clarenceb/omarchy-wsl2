@@ -511,19 +511,37 @@ Or change it live from inside the running session:
 swaymsg output WL-1 resolution 1920x1080
 ```
 
-Windows' **`Win`** shortcuts still work on the host window, because the OS
-reserves those before any application sees them:
+**Why there is no titlebar at all.** WSLg's compositor does not advertise
+`zxdg_decoration_manager_v1` — you can confirm this in the globals list in
+[12-wayland-on-wsl2.md](12-wayland-on-wsl2.md#3a-wayland-backend-nested-inside-wslg).
+Without that protocol sway cannot ask for a server-side titlebar, and it draws
+no client-side one for its own backend output. So there is genuinely nothing
+to grab with the mouse.
+
+**To move it freely**, use the Windows system menu from the *taskbar*, which
+Windows handles outside the guest so WSLg cannot intercept it:
+
+1. **Shift + right-click** the window's taskbar button
+2. Choose **Move**
+3. Use the **arrow keys** — or move the mouse — then press **Enter**
+
+**To resize or reposition without dragging**, the `Win` shortcuts work,
+because Windows reserves those before any application sees them:
 
 | Keys | Action |
 |---|---|
 | `Win+Up` | Maximise |
 | `Win+Left` / `Win+Right` | Snap to half the screen |
 | `Win+Down` | Restore / minimise |
+| `Win+Shift+Left` / `Right` | Move to the next monitor |
 
-`Alt+Space` (the Windows system menu) does **not** work here. WSLg forwards
-ordinary keystrokes to the focused Linux application, so sway receives it
-instead of Windows. Only `Win`-prefixed combinations are intercepted by the
-host, which is also why `SUPER` keybindings are unreliable in nested mode.
+`Alt+Space` does **not** work: WSLg forwards ordinary keystrokes to the
+focused Linux application, so sway receives it rather than Windows. Only
+`Win`-prefixed combinations are intercepted by the host — the same mechanism
+that makes `SUPER` keybindings unreliable in nested mode.
+
+If you want a window you can actually move and resize normally, use VNC: the
+viewer is an ordinary Windows application with a real titlebar.
 
 If you want a properly resizable, full-screen desktop, use VNC mode — it is
 the recommended mode anyway:
