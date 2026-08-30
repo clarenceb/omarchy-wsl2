@@ -477,14 +477,19 @@ Or change it live from inside the running session:
 swaymsg output WL-1 resolution 1920x1080
 ```
 
-Windows' own window management still applies to the host window:
+Windows' **`Win`** shortcuts still work on the host window, because the OS
+reserves those before any application sees them:
 
 | Keys | Action |
 |---|---|
-| `Alt+Space` | Windows system menu → Move / Size, then arrow keys |
 | `Win+Up` | Maximise |
 | `Win+Left` / `Win+Right` | Snap to half the screen |
 | `Win+Down` | Restore / minimise |
+
+`Alt+Space` (the Windows system menu) does **not** work here. WSLg forwards
+ordinary keystrokes to the focused Linux application, so sway receives it
+instead of Windows. Only `Win`-prefixed combinations are intercepted by the
+host, which is also why `SUPER` keybindings are unreliable in nested mode.
 
 If you want a properly resizable, full-screen desktop, use VNC mode — it is
 the recommended mode anyway:
