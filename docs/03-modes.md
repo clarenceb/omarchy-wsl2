@@ -179,11 +179,17 @@ very thing WSLg does offer. Maximise the window like any other.
 **Cons:** it's a window, not a session; the outer compositor owns some input
 focus, so session-lock and global-hotkey behaviour is imperfect.
 
-### Mode 3b — Headless + VNC
+### Mode 3b — Headless + VNC  *(recommended)*
 
 sway runs on its headless backend against a virtual output, and `wayvnc`
 serves that output. This is the closest thing to a "real" desktop: resizable,
-full-screen capable, independent of WSLg.
+full-screen capable, independent of WSLg — and in practice it is the **better
+of the two modes**, for two concrete reasons:
+
+- **`SUPER` keybindings actually work.** WSLg claims many `SUPER`
+  combinations before sway sees them; VNC owns its own input stack.
+- **It feels faster.** Nested mode composites twice — sway into WSLg, WSLg
+  into Windows — while VNC renders once and ships pixels.
 
 ```bash
 omarchy-wsl-desktop vnc --size 2560x1440
@@ -202,13 +208,21 @@ flowchart LR
     style D fill:#FFF3E4,stroke:#E8842B,color:#13233A
 ```
 
-Install a viewer on Windows and connect to `127.0.0.1:5900`:
+#### Installing a VNC viewer on Windows
+
+**TigerVNC** is the recommended client — it is free, actively maintained, and
+tested against this setup:
 
 ```powershell
 winget install -e --id TigerVNC.TigerVNC
 ```
 
-> RealVNC's winget manifest currently 404s on download; TigerVNC works.
+> **RealVNC's winget manifest currently 404s** on download
+> (`0x80190194`), so don't bother with `RealVNC.VNCViewer`. TightVNC
+> (`GlavSoft.TightVNC`) also works but bundles a server you don't need.
+
+Then connect to `127.0.0.1:5900`. WSL2 forwards localhost from Windows
+automatically, so no firewall or port configuration is needed.
 
 Options:
 
@@ -298,6 +312,42 @@ ever be as big as that window.
 > TigerVNC scale it up — usually the better trade. See
 > [12-wayland-on-wsl2.md](12-wayland-on-wsl2.md#6-what-this-costs-you).
 
+### Copy and paste
+
+**Clipboard works in both modes**, in both directions — this is not a
+VNC-only compromise.
+
+| | Nested (WSLg) | VNC |
+|---|---|---|
+| Text, Windows → Linux | ✅ | ✅ |
+| Text, Linux → Windows | ✅ | ✅ |
+| Images / files | ✅ | ❌ text only |
+
+Over VNC it works because `wayvnc` implements the `wlr-data-control` /
+`ext-data-control` protocols and bridges them to the VNC clipboard extension
+(`src/data-control.c`), and sway implements the compositor side. TigerVNC
+handles the Windows end.
+
+The limitation is the VNC protocol itself: its clipboard carries **plain text
+only**. Copying an image or a file between Windows and the VNC session will
+not work — use nested mode, or the shared filesystem, for those:
+
+```bash
+cp /mnt/c/Users/you/Pictures/shot.png ~/
+explorer.exe .        # open the current Linux dir in Windows Explorer
+```
+
+Inside the session, `wl-copy` and `wl-paste` work as normal:
+
+```bash
+wl-copy < notes.txt
+wl-paste > out.txt
+```
+
+> If clipboard stops working over VNC, it is almost always the viewer: check
+> TigerVNC's menu (`F8`) → Options → Misc → "Accept clipboard from server" and
+> "Send clipboard to server" are both enabled.
+
 ### Trying Hyprland anyway
 
 ```bash
@@ -317,15 +367,15 @@ Aquamarine ever gains a shm allocator.
 flowchart TD
     A{"What do you want?"} -->|"Terminal, Neovim, git"| M1["Mode 1 - headless<br/>PROFILE=headless"]
     A -->|"A browser or editor<br/>alongside Windows apps"| M2["Mode 2 - WSLg apps<br/>PROFILE=apps"]
-    A -->|"To learn tiling<br/>and keybindings"| M3A["Mode 3a - nested<br/>PROFILE=desktop"]
-    A -->|"A full-screen<br/>Linux desktop"| M3B["Mode 3b - VNC<br/>PROFILE=desktop"]
+    A -->|"A full desktop<br/>(recommended)"| M3B["Mode 3b - VNC full screen<br/>SUPER keys work, faster"]
+    A -->|"A desktop in a window,<br/>no VNC client"| M3A["Mode 3a - nested<br/>some SUPER keys lost"]
     A -->|"Hyprland itself,<br/>or Omarchy exactly as designed"| VM["Use a Hyper-V VM<br/>not WSL"]
 
     style A fill:#E8F6FB,stroke:#2AA6C4,color:#13233A
     style M1 fill:#E6F7EE,stroke:#1E9E63,color:#13233A
     style M2 fill:#E6F7EE,stroke:#1E9E63,color:#13233A
     style M3A fill:#FFF3E4,stroke:#E8842B,color:#13233A
-    style M3B fill:#FFF3E4,stroke:#E8842B,color:#13233A
+    style M3B fill:#E6F7EE,stroke:#1E9E63,color:#13233A
     style VM fill:#EFEBFF,stroke:#5B4BD6,color:#13233A
 ```
 
@@ -346,6 +396,9 @@ flowchart TD
 | hypridle / hyprlock / hyprsunset | — | — | ❌ Hyprland-only | ❌ Hyprland-only |
 | Multi-monitor | — | ✅ native Windows | ❌ single output | ❌ single output |
 | Audio | — | ✅ | ✅ | ⚠️ no VNC audio channel |
+| Clipboard (text) | ✅ | ✅ | ✅ | ✅ |
+| Clipboard (images/files) | ✅ | ✅ | ✅ | ❌ VNC is text-only |
+| `SUPER` keybindings | — | — | ⚠️ WSLg steals some | ✅ all |
 
 Mode 3 trades Hyprland's animations and `hypr*` daemons for a desktop that
 actually starts. Everything Omarchy does *outside* the compositor — the

@@ -61,6 +61,7 @@ bindsym \$mod+b exec chromium
 bindsym \$mod+e exec nautilus
 bindsym \$mod+Shift+e exit
 bindsym \$mod+Shift+r reload
+bindsym \$mod+Shift+w exec omarchy-wsl-bg next
 
 # focus / move, vim keys and arrows
 bindsym \$mod+h focus left
@@ -93,6 +94,11 @@ bindsym \$mod+r mode "resize"
 
 # Floating windows get a real titlebar, so dialogs stay draggable by mouse.
 for_window [floating] border normal 2
+
+# Omarchy's TUI launchers pass --app-id=TUI.float / TUI.tile through
+# xdg-terminal-exec; honour those hints.
+for_window [app_id="TUI.float"] floating enable, resize set 1100 700
+for_window [app_id="TUI.tile"] floating disable
 
 # workspaces
 EOF
@@ -363,7 +369,10 @@ chmod 0644 /etc/skel/.config/waybar-sway/config.jsonc \
 info "Writing the launcher and notification styling"
 install -d -m 0755 /etc/skel/.config/wofi /etc/skel/.config/mako
 
-cat >/etc/skel/.config/wofi/config <<'EOF'
+cat >/etc/skel/.config/wofi/config <<EOF
+# term= is what makes Terminal=true .desktop entries launch at all; without
+# it wofi silently does nothing for TUI apps like btop.
+term=$TERMINAL
 show=drun
 width=520
 height=380

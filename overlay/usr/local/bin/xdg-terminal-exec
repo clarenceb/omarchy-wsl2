@@ -1,0 +1,87 @@
+#!/bin/bash
+# xdg-terminal-exec - minimal implementation of the XDG Terminal Execution spec.
+#
+# WHY THIS EXISTS
+# ---------------
+# Omarchy's .desktop entries for terminal apps do not use `Terminal=true`.
+# They call xdg-terminal-exec directly, e.g.:
+#
+#     Exec=xdg-terminal-exec --app-id=TUI.float -e bash -c "dua i /"
+#     Exec=xdg-terminal-exec --app-id=TUI.tile -e omarchy-launch-docker-tui
+#
+# That helper is AUR-only, so it is absent from a repo-only image like this
+# one. The launcher then finds the entry, runs a command that does not exist,
+# and nothing happens - silently. btop, Disk Usage, Docker and friends all
+# appear in the launcher but do nothing when picked.
+#
+# This shim implements enough of the spec for those entries to work, and maps
+# --app-id onto whichever terminal is installed so the sway float/tile rules
+# still apply.
+#
+# Spec: https://gitlab.freedesktop.org/terminal-wg/specifications
+
+set -euo pipefail
+
+APP_ID=""
+declare -a CMD=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --app-id=*)  APP_ID="${1#*=}"; shift ;;
+    --app-id)    APP_ID="${2:-}"; shift 2 ;;
+    -e|--)       shift; CMD=("$@"); break ;;
+    --help|-h)   sed -n '2,3p' "$0" | sed 's/^# \?//'; exit 0 ;;
+    *)           CMD=("$@"); break ;;
+  esac
+done
+
+# Honour the user's choice first, then the spec's suggested order, filtered to
+# what Omarchy actually ships.
+pick_terminal() {
+  local t
+  for t in ${TERMINAL:-} alacritty foot kitty wezterm ghostty xterm; do
+    [[ -n $t ]] && command -v "$t" >/dev/null 2>&1 && { echo "$t"; return 0; }
+  done
+  return 1
+}
+
+TERM_BIN=$(pick_terminal) || {
+  echo "xdg-terminal-exec: no terminal emulator found" >&2
+  exit 127
+}
+
+# With no command, just open a shell.
+(( ${#CMD[@]} )) || CMD=("${SHELL:-/bin/bash}")
+
+case "$TERM_BIN" in
+  alacritty)
+    if [[ -n $APP_ID ]]; then
+      exec alacritty --class "$APP_ID" -e "${CMD[@]}"
+    fi
+    exec alacritty -e "${CMD[@]}"
+    ;;
+  foot)
+    if [[ -n $APP_ID ]]; then
+      exec foot --app-id="$APP_ID" -e "${CMD[@]}"
+    fi
+    exec foot -e "${CMD[@]}"
+    ;;
+  kitty)
+    if [[ -n $APP_ID ]]; then
+      exec kitty --class "$APP_ID" "${CMD[@]}"
+    fi
+    exec kitty "${CMD[@]}"
+    ;;
+  wezterm)
+    exec wezterm start -- "${CMD[@]}"
+    ;;
+  ghostty)
+    if [[ -n $APP_ID ]]; then
+      exec ghostty --class="$APP_ID" -e "${CMD[@]}"
+    fi
+    exec ghostty -e "${CMD[@]}"
+    ;;
+  *)
+    exec "$TERM_BIN" -e "${CMD[@]}"
+    ;;
+esac

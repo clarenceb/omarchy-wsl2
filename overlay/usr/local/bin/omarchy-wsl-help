@@ -22,9 +22,11 @@ cat <<'EOF'
     omarchy-wsl-desktop --floating draggable windows with titlebars
     omarchy-wsl-desktop --tiling   back to Omarchy's tiling model
 
-    In TigerVNC, F8 opens the menu (Ctrl+M / Alt+M on 1.16+) - use it to
-    leave full screen. VNC is usually the better mode: SUPER keys work,
-    and it composites once instead of twice.
+    VNC full screen is the RECOMMENDED mode: SUPER keys work (WSLg steals
+    them when nested) and it composites once instead of twice.
+      Windows:  winget install -e --id TigerVNC.TigerVNC
+      Connect:  127.0.0.1:5900     Leave full screen: F8 (Ctrl+M on 1.16+)
+    Clipboard works both ways in both modes; VNC is text-only.
 
   KEYS IN THE DESKTOP   (SUPER = the Windows key)
     New to tiling? These five are enough to get started:
@@ -56,6 +58,9 @@ cat <<'EOF'
   THEMING
     omarchy-theme-set "Tokyo Night"      switch theme
     omarchy-theme-list                   what is available
+    omarchy-wsl-bg                       list backgrounds (* = current)
+    omarchy-wsl-bg 3 | next              set the 3rd, or cycle
+    omarchy-wsl-bg ~/pic.png             use your own image
     ~/.config/omarchy/                   your overrides
 
   PACKAGES

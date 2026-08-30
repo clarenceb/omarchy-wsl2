@@ -36,15 +36,63 @@ Recommended `settings.json` (Windows side):
 
 ### Alternative: full GUI VS Code via WSLg
 
-If you want VS Code as a Linux app inside the Hyprland session:
+If you want VS Code as a Linux app instead:
 
 ```bash
 yay -S visual-studio-code-bin     # x86_64 only
 omarchy-wsl-app code
 ```
 
-On aarch64 use the ARM64 `.deb`/tarball from Microsoft, or stick with the
-Windows + WSL-extension approach.
+On aarch64 use the ARM64 `.deb`/tarball from Microsoft, or the open-source
+build that *is* in the Arch Linux ARM repos:
+
+```bash
+sudo pacman -Syu code             # 'code' = Code - OSS, builds for aarch64
+```
+
+Note that Code - OSS uses the Open VSX marketplace, so some Microsoft
+extensions (including the WSL and C# ones) are unavailable. For real work the
+Windows + WSL-extension route above remains the better answer on every
+architecture.
+
+## Web browsers
+
+`chromium` is installed already. Everything below is in the Arch repos for
+**both x86_64 and aarch64** — verified against the Arch Linux ARM database:
+
+| Package | Browser | Notes |
+|---|---|---|
+| `chromium` | Chromium | Shipped by default |
+| `firefox` | Firefox | Best all-round second choice |
+| `epiphany` | GNOME Web | Light, WebKit |
+| `falkon` | Falkon | Light, Qt/WebEngine |
+| `qutebrowser` | qutebrowser | Keyboard-driven, vim bindings — fits Omarchy nicely |
+| `nyxt`, `luakit` | Nyxt / Luakit | Keyboard-driven, niche |
+
+```bash
+sudo pacman -Syu firefox
+```
+
+**Brave, Vivaldi, Edge, Opera and Chrome are x86_64-only** in practice — their
+AUR packages repackage upstream binaries that have no aarch64 Linux build. On
+x86_64 you can install them from the AUR:
+
+```bash
+yay -S brave-bin                  # x86_64 only
+```
+
+> **Run browsers through WSLg, not inside the desktop session.** The sway
+> session is CPU-rendered, so scrolling and video are noticeably soft:
+>
+> ```bash
+> omarchy-wsl-app firefox         # gets D3D12 acceleration via WSLg
+> ```
+>
+> Inside the desktop it still works, just slower. See
+> [12-wayland-on-wsl2.md](12-wayland-on-wsl2.md#6-what-this-costs-you).
+
+Browsers launched from the desktop's launcher (`SUPER+Space`) run inside the
+session. For the accelerated path, launch them from a normal WSL shell.
 
 ## GitHub Copilot CLI
 

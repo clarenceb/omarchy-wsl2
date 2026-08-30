@@ -320,6 +320,47 @@ Current builds keep them. On an affected image:
 sudo pacman -Sy --needed <package>
 ```
 
+### Apps in the launcher do nothing when I pick them
+
+GUI apps work but terminal apps (btop, Disk Usage, Docker, nvim) silently fail.
+
+Two independent causes, both fixed in current images:
+
+**1. Omarchy's TUI entries call `xdg-terminal-exec`.** They don't use
+`Terminal=true` — they do this:
+
+```ini
+Exec=xdg-terminal-exec --app-id=TUI.float -e bash -c "dua i /"
+```
+
+`xdg-terminal-exec` is an **AUR-only** package, so it is absent from a
+repo-only image. The launcher runs a command that doesn't exist and reports
+nothing. This project ships a compatible shim at
+`/usr/local/bin/xdg-terminal-exec`. Check yours:
+
+```bash
+command -v xdg-terminal-exec || echo "missing - rebuild, or copy it from overlay/"
+```
+
+**2. wofi needs to be told which terminal to use** for `Terminal=true`
+entries. Without `term=` in `~/.config/wofi/config` it does nothing for them:
+
+```bash
+grep term= ~/.config/wofi/config || echo 'term=alacritty' >> ~/.config/wofi/config
+```
+
+To see the real error, run the launcher from a terminal and watch its output:
+
+```bash
+wofi --show drun
+```
+
+Or test the entry's `Exec` line directly:
+
+```bash
+grep Exec ~/.local/share/applications/btop.desktop /usr/share/applications/btop.desktop 2>/dev/null
+```
+
 ### I'm stuck in TigerVNC's full screen
 
 Press **`F8`** for the popup menu, then click *Full screen* or press `f`.

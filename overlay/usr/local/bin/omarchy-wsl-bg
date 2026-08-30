@@ -1,0 +1,143 @@
+#!/bin/bash
+# omarchy-wsl-bg - list, set and cycle the desktop background under sway.
+#
+# WHY THIS EXISTS
+# ---------------
+# Omarchy's own omarchy-theme-bg-set only updates the `current/background`
+# symlink and then pushes the change over IPC to omarchy-shell (Quickshell),
+# which is Hyprland-side and not running here. swaybg reads its image once at
+# startup, so nothing changes on screen until it is restarted.
+#
+# This helper updates the same symlink - so Omarchy's own tooling stays in
+# step - and then restarts swaybg against the live sway socket.
+#
+# It also copes with both Omarchy layouts: older builds keep state in
+# ~/.config/omarchy/current, newer ones in ~/.local/state/omarchy/current.
+#
+# Usage:
+#   omarchy-wsl-bg                 list available backgrounds
+#   omarchy-wsl-bg <n>             set the nth background from that list
+#   omarchy-wsl-bg <path>          set a specific image
+#   omarchy-wsl-bg next            cycle to the next one
+#   omarchy-wsl-bg --colour RRGGBB use a flat colour instead of an image
+
+set -euo pipefail
+
+SHIPPED_DIR=/usr/share/omarchy-wsl2/wallpapers
+
+# Omarchy relocated its state directory; support both.
+state_dir() {
+  local d
+  for d in "$HOME/.local/state/omarchy/current" "$HOME/.config/omarchy/current"; do
+    [[ -d $d ]] && { echo "$d"; return 0; }
+  done
+  # Nothing yet - create the modern location.
+  mkdir -p "$HOME/.local/state/omarchy/current"
+  echo "$HOME/.local/state/omarchy/current"
+}
+
+STATE=$(state_dir)
+LINK="$STATE/background"
+
+# Every image we could offer: the active theme's own backgrounds, anything the
+# user dropped in, and the wallpapers this project ships.
+collect() {
+  local theme_name=""
+  [[ -r $STATE/theme.name ]] && theme_name=$(<"$STATE/theme.name")
+
+  find -L \
+    "$STATE/theme/backgrounds" \
+    "$HOME/.config/omarchy/backgrounds/${theme_name:-none}" \
+    "$HOME/Pictures/wallpapers" \
+    "$SHIPPED_DIR" \
+    -maxdepth 1 -type f \
+    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+       -o -iname '*.webp' -o -iname '*.bmp' \) \
+    -print 2>/dev/null | sort -u
+}
+
+# Restart swaybg inside the running session. Without a live socket we can still
+# update the symlink, which the next session start will pick up.
+reload() {
+  local img="$1" mode="${2:-image}"
+  local sock
+  sock=$(find "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" -maxdepth 1 \
+           -name 'sway-ipc.*' -type s 2>/dev/null | head -1) || true
+
+  if [[ -z ${sock:-} ]]; then
+    echo "No running sway session - this will apply next time you start one."
+    return 0
+  fi
+
+  export SWAYSOCK="$sock"
+  # swaymsg exec detaches the child, so the old swaybg must go first.
+  swaymsg exec -- 'pkill -x swaybg' >/dev/null 2>&1 || true
+  sleep 0.2
+  if [[ $mode == colour ]]; then
+    swaymsg exec -- "swaybg -c '$img'" >/dev/null 2>&1
+  else
+    swaymsg exec -- "swaybg -m fill -i '$img'" >/dev/null 2>&1
+  fi
+  echo "Applied to the running session."
+}
+
+list() {
+  local -a bgs; mapfile -t bgs < <(collect)
+  if (( ${#bgs[@]} == 0 )); then
+    echo "No backgrounds found."
+    echo "Drop images in ~/Pictures/wallpapers, or apply a theme with omarchy-theme-set."
+    return 1
+  fi
+
+  local current=""
+  [[ -L $LINK ]] && current=$(readlink -f "$LINK" 2>/dev/null || true)
+
+  local i=1 marker
+  for b in "${bgs[@]}"; do
+    marker="  "
+    [[ $(readlink -f "$b") == "$current" ]] && marker=" *"
+    printf '%s%2d) %s\n' "$marker" "$i" "${b#"$HOME"/}"
+    ((i++))
+  done
+  echo
+  echo "Set one with:  omarchy-wsl-bg <number>"
+}
+
+set_bg() {
+  local img
+  img=$(readlink -f "$1") || { echo "Cannot resolve: $1" >&2; exit 1; }
+  [[ -f $img ]] || { echo "Not a file: $1" >&2; exit 1; }
+
+  mkdir -p "$(dirname "$LINK")"
+  ln -nsf "$img" "$LINK"
+  echo "Background: ${img#"$HOME"/}"
+  reload "$img"
+}
+
+case "${1:-}" in
+  ""|-l|--list) list ;;
+  -h|--help)    sed -n '16,22p' "$0" | sed 's/^# \?//' ;;
+  --colour|--color)
+    col="${2:?--colour needs RRGGBB}"
+    [[ $col =~ ^#?[0-9A-Fa-f]{6}$ ]] || { echo "Expected RRGGBB" >&2; exit 1; }
+    reload "#${col#\#}" colour
+    ;;
+  next)
+    mapfile -t bgs < <(collect)
+    (( ${#bgs[@]} )) || { echo "No backgrounds found." >&2; exit 1; }
+    cur=""; [[ -L $LINK ]] && cur=$(readlink -f "$LINK" 2>/dev/null || true)
+    idx=-1
+    for i in "${!bgs[@]}"; do
+      [[ $(readlink -f "${bgs[$i]}") == "$cur" ]] && { idx=$i; break; }
+    done
+    set_bg "${bgs[$(( (idx + 1) % ${#bgs[@]} ))]}"
+    ;;
+  *[!0-9]*) set_bg "$1" ;;          # a path
+  *)                                 # an index from the list
+    mapfile -t bgs < <(collect)
+    n="$1"
+    (( n >= 1 && n <= ${#bgs[@]} )) \
+      || { echo "Pick 1-${#bgs[@]}; run 'omarchy-wsl-bg' to list." >&2; exit 1; }
+    set_bg "${bgs[$((n-1))]}"
+    ;;
+esac
