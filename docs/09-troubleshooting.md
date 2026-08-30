@@ -458,6 +458,41 @@ swaymsg -t get_tree | grep -E '"(name|type|floating|border)"'
 
 A floating window shows `"type": "floating_con"` and `"border": "normal"`.
 
+### The nested window has no titlebar - I can't move or resize it
+
+That is the **WSLg host window**, not a sway window. sway requests
+client-side decorations and draws none, and WSLg adds no frame of its own, so
+there is nothing to grab.
+
+Its size is simply the size of the wlroots Wayland-backend output, so set it
+directly:
+
+```bash
+omarchy-wsl-desktop --size 1600x900
+```
+
+Or change it live from inside the running session:
+
+```bash
+swaymsg output WL-1 resolution 1920x1080
+```
+
+Windows' own window management still applies to the host window:
+
+| Keys | Action |
+|---|---|
+| `Alt+Space` | Windows system menu → Move / Size, then arrow keys |
+| `Win+Up` | Maximise |
+| `Win+Left` / `Win+Right` | Snap to half the screen |
+| `Win+Down` | Restore / minimise |
+
+If you want a properly resizable, full-screen desktop, use VNC mode — it is
+the recommended mode anyway:
+
+```bash
+omarchy-wsl-desktop vnc --size 1920x1080
+```
+
 ### Windows won't move or resize with the mouse
 
 Tiled windows have no titlebar by design — that is what a tiling WM is. Use:

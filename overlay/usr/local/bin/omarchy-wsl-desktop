@@ -31,7 +31,7 @@
 #                      Connect a Windows VNC client for a true full screen.
 #
 # Options:
-#   --size WxH        virtual output size for vnc mode  (default 1920x1080)
+#   --size WxH        output size; in nested mode this sets the window size
 #   --port N          VNC port                          (default 5900)
 #   --bind ADDR       VNC bind address                  (default 127.0.0.1)
 #   --floating        windows float with titlebars, like Windows/GNOME
@@ -54,7 +54,7 @@ usage() { sed -n '24,42p' "$0" | sed 's/^# \?//'; exit "${1:-0}"; }
 while [[ $# -gt 0 ]]; do
   case "$1" in
     nested|vnc)   MODE="$1"; shift ;;
-    --size)       SIZE="${2:?--size needs WxH}"; shift 2 ;;
+    --size)       SIZE="${2:?--size needs WxH}"; SIZE_SET=1; shift 2 ;;
     --port)       PORT="${2:?--port needs a number}"; shift 2 ;;
     --bind)       BIND="${2:?--bind needs an address}"; shift 2 ;;
     --floating)   LAYOUT=floating; shift ;;
@@ -172,7 +172,36 @@ case "$MODE" in
 
     echo "Starting the desktop nested in WSLg (host socket: $WAYLAND_DISPLAY)..."
     echo "Close the window, or press SUPER+SHIFT+E, to exit."
-    exec sway
+
+    # The host window carries no titlebar: sway requests client-side
+    # decorations and draws none, and WSLg does not add its own. Its size is
+    # simply the size of the wlroots Wayland-backend output, so --size is the
+    # way to control it. Without --size we just hand over to sway directly.
+    if [[ -z ${SIZE_SET:-} ]]; then
+      exec sway
+    fi
+
+    sway &
+    SWAY_PID=$!
+    trap 'kill "$SWAY_PID" 2>/dev/null || true' EXIT INT TERM
+
+    SWAYSOCK="$XDG_RUNTIME_DIR/sway-ipc.$(id -u).$SWAY_PID.sock"
+    for _ in $(seq 1 60); do
+      [[ -S $SWAYSOCK ]] && break
+      kill -0 "$SWAY_PID" 2>/dev/null || break
+      sleep 0.25
+    done
+
+    if [[ -S $SWAYSOCK ]]; then
+      OUTPUT=$(swaymsg -s "$SWAYSOCK" -t get_outputs -r \
+               | sed -n 's/.*"name": *"\([^"]*\)".*/\1/p' | head -1)
+      swaymsg -s "$SWAYSOCK" output "${OUTPUT:-WL-1}" resolution "$SIZE" \
+        >/dev/null 2>&1 || true
+      echo "Window sized to ${SIZE}. Resize later from inside the session with:"
+      echo "    swaymsg output ${OUTPUT:-WL-1} resolution 1600x900"
+    fi
+
+    wait "$SWAY_PID"
     ;;
 
   # ----------------------------------------------------------------- vnc ---
