@@ -490,4 +490,55 @@ cursor {
 }
 EOF
 
+# -------------------------------------------------------- desktop entries ---
+# Omarchy ships two sets of .desktop files that we were not installing:
+#
+#   applications/*.desktop         its own launchers (Docker, Disk Usage, the
+#                                  web apps) - these call xdg-terminal-exec,
+#                                  for which we ship a shim
+#   applications/hidden/*.desktop  21 `Hidden=true` stubs that suppress junk
+#                                  pulled in as dependencies - avahi-discover,
+#                                  qv4l2, cmake-gui, the fcitx5 family, ...
+#
+# Without the second set the launcher lists tools that cannot work here and
+# fail with things like "No module named 'dbus'".
+info "Installing Omarchy's desktop entries"
+APPS_DIR=/etc/skel/.local/share/applications
+install -d -m 0755 "$APPS_DIR"
+
+if [[ -d $OMARCHY_SHARE/applications ]]; then
+  find "$OMARCHY_SHARE/applications" -maxdepth 1 -name '*.desktop' \
+    -exec install -m 0644 {} "$APPS_DIR/" \; 2>/dev/null || true
+  find "$OMARCHY_SHARE/applications/hidden" -maxdepth 1 -name '*.desktop' \
+    -exec install -m 0644 {} "$APPS_DIR/" \; 2>/dev/null || true
+  if [[ -d $OMARCHY_SHARE/applications/icons ]]; then
+    install -d -m 0755 /etc/skel/.local/share/icons
+    find "$OMARCHY_SHARE/applications/icons" -maxdepth 1 -type f \
+      -exec install -m 0644 {} /etc/skel/.local/share/icons/ \; 2>/dev/null || true
+  fi
+  info "  installed $(find "$APPS_DIR" -name '*.desktop' | wc -l) entries"
+else
+  info "  no applications/ in the Omarchy checkout - skipping"
+fi
+
+# Entries that are meaningless under WSL2 specifically, on top of Omarchy's
+# own list. A Hidden=true stub in ~/.local/share/applications masks the
+# system copy without touching pacman-owned files.
+info "Hiding desktop entries that cannot work under WSL2"
+for junk in \
+  avahi-discover bssh bvnc \
+  org.freedesktop.MalcontentControl \
+  qv4l2 qvidcap \
+  xgps xgpsspeed \
+  cups cmake-gui \
+  nm-connection-editor \
+  lstopo \
+  electron34 electron35 electron36 \
+  uuctl \
+  hyprland
+do
+  printf '[Desktop Entry]\nHidden=true\n' >"$APPS_DIR/${junk}.desktop"
+  chmod 0644 "$APPS_DIR/${junk}.desktop"
+done
+
 info "Desktop tier installed"

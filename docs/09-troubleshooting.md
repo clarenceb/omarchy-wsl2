@@ -320,6 +320,34 @@ Current builds keep them. On an affected image:
 sudo pacman -Sy --needed <package>
 ```
 
+### The launcher lists tools that error or do nothing
+
+Entries like *Avahi SSH Server Browser*, *qv4l2*, *CMake* or the fcitx5 tools
+come from packages pulled in as dependencies. They are not meant to be user
+facing here, and fail with things like:
+
+```
+Error: No module named 'dbus'
+Sorry, to use this tool you need to install Avahi, pygtk and python-dbus.
+```
+
+Omarchy suppresses these with 21 `Hidden=true` stubs in
+`applications/hidden/`. Current images install those plus a WSL-specific list.
+To hide anything else yourself:
+
+```bash
+printf '[Desktop Entry]\nHidden=true\n' \
+  > ~/.local/share/applications/<entry-name>.desktop
+```
+
+The name must match the system entry exactly — look it up with:
+
+```bash
+ls /usr/share/applications/ | grep -i <partial-name>
+```
+
+No reload is needed; wofi re-reads the directories on each launch.
+
 ### Apps in the launcher do nothing when I pick them
 
 GUI apps work but terminal apps (btop, Disk Usage, Docker, nvim) silently fail.
