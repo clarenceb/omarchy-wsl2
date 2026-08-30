@@ -40,6 +40,14 @@ else
   info "  mask failed; neutralised ExecStop via drop-in instead"
 fi
 
+# Belt and braces: if systemd-binfmt ever does run - the mask is removed, a
+# package upgrade replaces the unit - have it put WSL's own handler back
+# rather than leaving the VM without .exe execution. See omarchy-wsl-interop.
+info "Installing /etc/binfmt.d/WSLInterop.conf"
+install -d -m 0755 /etc/binfmt.d
+printf ':WSLInterop:M::MZ::/init:PF\n' >/etc/binfmt.d/WSLInterop.conf
+chmod 0644 /etc/binfmt.d/WSLInterop.conf
+
 info "Clearing the package cache"
 # NOTE: do NOT use `pacman -Scc --noconfirm` here. With --noconfirm it answers
 # "yes" to the *second* prompt too ("remove unused repositories"), which wipes

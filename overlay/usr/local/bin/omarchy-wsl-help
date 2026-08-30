@@ -91,6 +91,8 @@ cat <<'EOF'
 
   DIAGNOSTICS
     omarchy-wsl-doctor             check WSLg / GPU / systemd / desktop
+    omarchy-wsl-interop            fix "Exec format error" running .exe files
+    sudo omarchy-wsl-interop --all   repair it and stop it recurring
 
   APPEARANCE
     omarchy-wsl-wt -i              style the Windows Terminal profile

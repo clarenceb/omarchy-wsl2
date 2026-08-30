@@ -146,6 +146,26 @@ It reads this project's docs and the vendored Omarchy source before answering,
 so it knows about the helpers above and about *your* setup's constraints — not
 just generic Arch advice. See [11-omarchy-learn.md](11-omarchy-learn.md).
 
+### Windows interop — `omarchy-wsl-interop`
+
+If `.exe` files stop working anywhere in WSL:
+
+```
+$ explorer.exe .
+cannot execute binary file: Exec format error
+```
+
+```bash
+omarchy-wsl-interop              # status
+sudo omarchy-wsl-interop --all   # repair now, and stop it recurring
+omarchy-wsl-interop --others     # check the other distros
+```
+
+**Why it happens:** `binfmt_misc` is shared by every distro in the WSL VM, and
+systemd's `systemd-binfmt.service` unregisters *every* entry when it stops —
+including WSL's own `WSLInterop` handler. So any systemd distro stopping
+breaks `.exe` execution for all of them. Fixing one distro is not enough.
+
 ### Credentials — `omarchy-wsl-keyring`
 
 If a tool asks:
@@ -189,6 +209,7 @@ omarchy-wsl-keyring --password  # prompts to unlock once per session
 | `omarchy-wsl-env` | A sourced library of WSL/WSLg/D-Bus/keyring helpers, not a command |
 | `xdg-terminal-exec` | A shim; Omarchy's TUI `.desktop` entries call it and it's AUR-only |
 | `/etc/profile.d/omarchy-wsl-term.sh` | Repairs `$TERM` when its terminfo entry is missing, so readline keeps working |
+| `systemd-binfmt` drop-in | Stops this distro flushing `binfmt_misc` for the whole VM |
 
 ---
 

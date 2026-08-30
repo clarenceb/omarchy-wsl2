@@ -739,17 +739,36 @@ which flushes **every** `binfmt_misc` entry, including WSL's own `WSLInterop`
 handler. Because all distros share one kernel, stopping this distro breaks
 interop for every other distro until the next `wsl --shutdown`.
 
-**Fix** (images built after this was found already mask it):
+**Fix:**
 
 ```bash
-sudo systemctl mask systemd-binfmt.service
+omarchy-wsl-interop                  # what's the state?
+sudo omarchy-wsl-interop --all       # re-register now, and stop it recurring
 ```
 
-then from Windows:
+`--repair` re-registers the handler immediately, so you do not have to
+restart. `--harden` neutralises the destructive `ExecStop` and installs
+`/etc/binfmt.d/WSLInterop.conf` so systemd puts the handler back if the unit
+ever runs.
+
+**Fixing one distro is not enough.** `binfmt_misc` is shared by the whole WSL
+VM, so a single unpatched distro — Ubuntu, a vendor image, anything running
+systemd — can break `.exe` for all of them. Check the rest:
+
+```bash
+omarchy-wsl-interop --others
+```
+
+It only inspects distros that are **already running**, because starting a
+stopped one can itself flush interop — the check would cause the failure it is
+looking for. Harden the others as you use them:
 
 ```powershell
-wsl --shutdown
+wsl -d <name> -u root -- systemctl mask systemd-binfmt.service
 ```
+
+`wsl --shutdown` from Windows always restores interop, but only until the next
+time a distro stops.
 
 ### The build fails with `Error 126` or `Could not read the WSL version`
 

@@ -1,0 +1,220 @@
+#!/bin/bash
+# omarchy-wsl-interop - diagnose and repair Windows interop (.exe execution).
+#
+# THE PROBLEM
+# -----------
+# Running any Windows binary from WSL suddenly fails:
+#
+#     $ explorer.exe .
+#     cannot execute binary file: Exec format error
+#     $ code .
+#     Code.exe: Exec format error
+#
+# Linux runs .exe files through a binfmt_misc handler named WSLInterop, which
+# WSL's /init registers at boot. The catch is that **binfmt_misc is shared by
+# every distro in the WSL VM** - it is one kernel, one mount.
+#
+# systemd ships systemd-binfmt.service with:
+#
+#     ExecStop=/usr/lib/systemd/systemd-binfmt --unregister
+#
+# which flushes **every** binfmt_misc entry, WSLInterop included. So when any
+# systemd-enabled distro stops - or that unit is merely restarted - .exe
+# execution breaks in *all* of them until the next `wsl --shutdown`.
+#
+# It is not enough to fix this in one distro: a single unpatched distro
+# anywhere in the VM can break interop for everything else.
+#
+# Usage:
+#   omarchy-wsl-interop            report status
+#   omarchy-wsl-interop --repair   re-register the handler right now
+#   omarchy-wsl-interop --harden   make it survive (needs root)
+#   omarchy-wsl-interop --all      repair and harden
+
+set -euo pipefail
+
+BINFMT=/proc/sys/fs/binfmt_misc
+ENTRY="$BINFMT/WSLInterop"
+# name : type M : offset : magic MZ : mask : interpreter : flags
+# P = preserve argv[0], F = open the interpreter immediately (survives
+# namespace and mount changes, which is what makes it work across distros).
+REG=':WSLInterop:M::MZ::/init:PF'
+
+ok()   { printf '  \033[32m✔\033[0m %s\n' "$*"; }
+bad()  { printf '  \033[31m✖\033[0m %s\n' "$*"; }
+hmm()  { printf '  \033[33m!\033[0m %s\n' "$*"; }
+note() { printf '      %s\n' "$*"; }
+
+is_root() { [[ $(id -u) -eq 0 ]]; }
+
+as_root() {
+  if is_root; then "$@"; else sudo "$@"; fi
+}
+
+registered() { [[ -e $ENTRY ]] && grep -qx enabled "$ENTRY" 2>/dev/null; }
+
+status() {
+  printf '\n\033[1mWindows interop\033[0m\n\n'
+
+  if [[ ! -d $BINFMT ]]; then
+    bad "binfmt_misc is not mounted - this is not a WSL kernel"
+    return 1
+  fi
+
+  if registered; then
+    ok "WSLInterop registered - .exe execution works"
+  elif [[ -e $ENTRY ]]; then
+    hmm "WSLInterop present but disabled"
+    note "Fix: omarchy-wsl-interop --repair"
+  else
+    bad "WSLInterop is NOT registered - .exe execution is broken"
+    note "Fix: omarchy-wsl-interop --repair"
+  fi
+
+  # Is this distro one of the ones that will break it again?
+  if command -v systemctl >/dev/null 2>&1; then
+    local state
+    state=$(systemctl is-enabled systemd-binfmt.service 2>/dev/null || echo unknown)
+    if [[ $state == masked ]]; then
+      ok "systemd-binfmt.service is masked here"
+    elif [[ -f /etc/systemd/system/systemd-binfmt.service.d/10-no-unregister.conf ]]; then
+      ok "systemd-binfmt.service has its destructive ExecStop neutralised"
+    else
+      hmm "systemd-binfmt.service ($state) can flush interop for the WHOLE VM"
+      note "Fix: sudo omarchy-wsl-interop --harden"
+    fi
+  fi
+
+  [[ -f /etc/binfmt.d/WSLInterop.conf ]] \
+    && ok "/etc/binfmt.d/WSLInterop.conf will re-register it if systemd runs" \
+    || hmm "no /etc/binfmt.d/WSLInterop.conf (systemd would not restore it)"
+
+  printf '\n'
+  note "binfmt_misc is shared by every distro in the WSL VM, so ANY distro"
+  note "running an unpatched systemd-binfmt can break .exe for all of them."
+  note "Check the others with:  omarchy-wsl-interop --others"
+  printf '\n'
+}
+
+repair() {
+  if registered; then
+    ok "already registered - nothing to do"
+    return 0
+  fi
+  # A stale, disabled entry must go before the name can be reused.
+  [[ -e $ENTRY ]] && as_root sh -c "echo -1 > '$ENTRY'" 2>/dev/null || true
+
+  if as_root sh -c "echo '$REG' > '$BINFMT/register'" 2>/dev/null && registered; then
+    ok "WSLInterop re-registered"
+    note "Test it:  explorer.exe ."
+    return 0
+  fi
+
+  bad "could not register the handler"
+  note "Fall back to a full restart, from Windows PowerShell:"
+  note "    wsl --shutdown"
+  return 1
+}
+
+harden() {
+  is_root || { bad "--harden needs root: sudo omarchy-wsl-interop --harden"; exit 1; }
+
+  # Neutralise only the destructive ExecStop, keeping ExecStart so genuine
+  # binfmt.d configuration still loads. Masking the unit would work too, but
+  # would also stop qemu-user-static and friends from registering.
+  install -d -m 0755 /etc/systemd/system/systemd-binfmt.service.d
+  cat >/etc/systemd/system/systemd-binfmt.service.d/10-no-unregister.conf <<'EOF'
+# Installed by omarchy-wsl-interop.
+#
+# The stock unit runs `systemd-binfmt --unregister` on stop, which flushes
+# EVERY binfmt_misc entry. binfmt_misc is shared across the whole WSL VM, so
+# that also removes WSL's own WSLInterop handler and breaks .exe execution in
+# every other distro until `wsl --shutdown`.
+[Service]
+ExecStop=
+EOF
+  ok "systemd-binfmt.service ExecStop neutralised"
+
+  # Belt and braces: if the unit does run, have it put WSLInterop back.
+  install -d -m 0755 /etc/binfmt.d
+  printf '%s\n' "$REG" >/etc/binfmt.d/WSLInterop.conf
+  chmod 0644 /etc/binfmt.d/WSLInterop.conf
+  ok "/etc/binfmt.d/WSLInterop.conf installed"
+
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  ok "systemd reloaded"
+  printf '\n'
+  note "This distro can no longer break interop for the rest of the VM."
+  note "Apply the same to every other distro:  omarchy-wsl-interop --others"
+  printf '\n'
+}
+
+others() {
+  printf '\n\033[1mOther distros in this WSL VM\033[0m\n\n'
+  if ! command -v wsl.exe >/dev/null 2>&1 || ! registered; then
+    bad "interop is not working, so other distros cannot be inspected"
+    note "Run 'omarchy-wsl-interop --repair' first."
+    return 1
+  fi
+
+  # IMPORTANT: only inspect distros that are ALREADY running.
+  #
+  # `wsl -d <name> -- ...` starts a stopped distro, and starting one whose
+  # systemd-binfmt is unpatched is itself a way to lose interop - the check
+  # would cause the very failure it is looking for. (Observed in testing: a
+  # full scan flushed WSLInterop mid-run.)
+  local -a distros
+  mapfile -t distros < <(wsl.exe -l -q --running 2>/dev/null | tr -d '\r\0' | grep -v '^$')
+  local -a stopped
+  mapfile -t stopped < <(wsl.exe -l -q 2>/dev/null | tr -d '\r\0' | grep -v '^$')
+  local me="${WSL_DISTRO_NAME:-}"
+
+  local d state
+  for d in "${distros[@]}"; do
+    [[ $d == "$me" ]] && { ok "$d (this distro)"; continue; }
+    # `systemctl is-enabled` prints "masked" but exits non-zero, so the
+    # fallback must not be chained with ||. Keep only the last line: some
+    # distros emit warnings first, and unreachable ones emit WSL errors.
+    state=$(wsl.exe -d "$d" -u root -- sh -c \
+      'if command -v systemctl >/dev/null 2>&1; then systemctl is-enabled systemd-binfmt.service 2>/dev/null; else echo no-systemd; fi' \
+      2>/dev/null | tr -d '\r\0' | grep -v '^$' | tail -1)
+    [[ -z ${state:-} ]] && state=unreachable
+
+    case "$state" in
+      masked|no-systemd) ok  "$d ($state)" ;;
+      unreachable)       hmm "$d (could not check - not started, or no root)" ;;
+      *)                 hmm "$d ($state) - can break interop for the whole VM"
+                         note "Fix: wsl -d $d -u root -- systemctl mask systemd-binfmt.service" ;;
+    esac
+  done
+
+  # Anything not currently running is listed but deliberately not started.
+  local d2 shown=0
+  for d2 in "${stopped[@]}"; do
+    local running=0 r
+    for r in "${distros[@]}"; do [[ $r == "$d2" ]] && running=1; done
+    (( running )) && continue
+    (( shown )) || { printf '\n  Not running, so not checked:\n'; shown=1; }
+    printf '      %s\n' "$d2"
+  done
+  if (( shown )); then
+    printf '\n'
+    note "Starting a distro to check it can itself break interop, so they are"
+    note "left alone. Harden them when you next use them:"
+    note "    wsl -d <name> -u root -- systemctl mask systemd-binfmt.service"
+  fi
+
+  printf '\n'
+  note "Distros with no systemd, or a masked unit, are safe."
+  printf '\n'
+}
+
+case "${1:-}" in
+  ""|--status) status ;;
+  --repair)    repair ;;
+  --harden)    harden ;;
+  --others)    others ;;
+  --all)       repair; is_root && harden || sudo "$0" --harden ;;
+  -h|--help)   sed -n '28,33p' "$0" | sed 's/^# \?//' ;;
+  *) echo "unknown option: $1" >&2; exit 1 ;;
+esac

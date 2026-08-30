@@ -119,6 +119,19 @@ sets the size at launch, `swaymsg output WL-1 resolution WxH` while running.
   automatically; if it is missing, `export TERM=xterm-256color` is the fix,
   and installing `foot-terminfo` / `kitty-terminfo` / `ncurses` is the cure
 
+**Windows interop**
+- `omarchy-wsl-interop` — status; `--repair` re-registers now; `--harden`
+  (root) stops it recurring; `--others` checks the other distros
+- Symptom: `explorer.exe .` or `code .` fails with **"Exec format error"** or
+  "cannot execute binary file". The `WSLInterop` binfmt_misc handler has been
+  unregistered
+- Cause: `binfmt_misc` is **shared by every distro in the WSL VM**, and
+  systemd ships `systemd-binfmt.service` with
+  `ExecStop=/usr/lib/systemd/systemd-binfmt --unregister`, which flushes every
+  entry. Any systemd distro stopping breaks `.exe` for all of them. Fixing one
+  distro is not enough — check them all
+- `wsl --shutdown` from Windows always fixes it, but only until next time
+
 **Diagnostics and setup**
 - `omarchy-wsl-doctor` — check WSLg, GPU, systemd and desktop readiness
 - `omarchy-wsl-help` — the cheat sheet, including all desktop keybindings

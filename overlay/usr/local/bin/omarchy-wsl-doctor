@@ -125,6 +125,13 @@ if command -v Hyprland >/dev/null 2>&1 || command -v hyprland >/dev/null 2>&1; t
   hmm "Hyprland present, but it cannot start on WSL2 (no DRM node for its GBM allocator)"
   printf '      See docs/12-wayland-on-wsl2.md; use omarchy-wsl-desktop instead\n'
 fi
+if [[ -e /proc/sys/fs/binfmt_misc/WSLInterop ]]; then
+  ok "Windows interop registered (.exe execution works)"
+else
+  hmm "Windows interop is NOT registered - .exe execution is broken"
+  printf '      Fix: sudo omarchy-wsl-interop --all\n'
+fi
+
 # Regression checks for problems that are silent until they bite.
 if [[ -n ${TERM:-} ]] && command -v infocmp >/dev/null 2>&1; then
   if infocmp "$TERM" >/dev/null 2>&1; then
