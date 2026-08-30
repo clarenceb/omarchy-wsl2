@@ -109,11 +109,20 @@ owsl_ensure_keyring() {
     return 0
   fi
 
+  # --unlock is what actually unlocks the login keyring: it reads the password
+  # from stdin, and starts the daemon if one is not running. --start on its own
+  # only starts/connects, leaving the collection LOCKED - which then raises an
+  # "Unlock Login Keyring" prompt the moment anything asks for a secret.
+  # An empty line unlocks a keyring created with an empty password.
   local out
-  # --unlock reads the password from stdin; an empty line unlocks a keyring
-  # created with an empty password, and is ignored otherwise.
-  out=$(printf '\n' | gnome-keyring-daemon --start --components=secrets,ssh \
-        2>/dev/null) || return 1
+  out=$(printf '\n' | timeout 10 gnome-keyring-daemon --unlock \
+        --components=secrets,ssh 2>/dev/null) || true
+
+  # --unlock does not always echo the environment; ask again if we got nothing.
+  if [[ -z ${out//[[:space:]]/} ]]; then
+    out=$(printf '\n' | timeout 10 gnome-keyring-daemon --start \
+          --components=secrets,ssh 2>/dev/null) || return 1
+  fi
 
   # The daemon prints VAR=value lines for us to adopt.
   local line

@@ -21,4 +21,20 @@ if [[ -z ${WAYLAND_DISPLAY:-} && -z ${DISPLAY:-} ]]; then
   exit 1
 fi
 
+# Chromium and Electron apps encrypt their cookie/password store with the
+# system keyring. When the keyring is locked they raise an "Unlock Login
+# Keyring" dialog on every launch - and under WSL there is often no unlocked
+# keyring, because there is no PAM login to unlock it.
+#
+# If we could not unlock one, tell them to use their own basic store instead,
+# so the app starts rather than blocking on a dialog. When the keyring IS
+# available we say nothing and they use it as normal.
+case "${1##*/}" in
+  chromium|chrome|google-chrome*|brave*|code|codium|electron*|signal-desktop|slack|discord)
+    if [[ -z ${GNOME_KEYRING_CONTROL:-} ]]; then
+      set -- "$1" --password-store=basic "${@:2}"
+    fi
+    ;;
+esac
+
 exec "$@"

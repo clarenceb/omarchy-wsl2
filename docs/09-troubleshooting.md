@@ -389,6 +389,40 @@ Or test the entry's `Exec` line directly:
 grep Exec ~/.local/share/applications/btop.desktop /usr/share/applications/btop.desktop 2>/dev/null
 ```
 
+### "Unlock Login Keyring" appears every time I launch an app
+
+The daemon is running but the collection is **locked**. WSL has no PAM login
+to unlock it at session start, so anything asking for a secret raises a
+prompt.
+
+```bash
+omarchy-wsl-keyring --unlock     # unlock in this shell
+omarchy-wsl-keyring --status     # confirm
+```
+
+**If a blank password is rejected**, the keyring was not created by this tool
+and has a password nobody remembers. Your Linux password will not work — there
+is no PAM integration under WSL to keep the two in step. Start over; existing
+keyrings are backed up with a timestamp, never deleted:
+
+```bash
+omarchy-wsl-keyring --reset
+```
+
+**Chromium, VS Code, Signal, Slack and Electron apps** are the usual
+offenders: they encrypt their cookie and password store with the keyring.
+`omarchy-wsl-app` now passes `--password-store=basic` to those when no
+unlocked keyring is available, so they start instead of blocking on a dialog.
+To force that yourself:
+
+```bash
+chromium --password-store=basic
+```
+
+The cost is that saved passwords and cookies are encrypted with a built-in
+key rather than the keyring — fine for a browser you sign into, not ideal for
+storing credentials.
+
 ### I'm stuck in TigerVNC's full screen
 
 Press **`F8`** for the popup menu, then click *Full screen* or press `f`.

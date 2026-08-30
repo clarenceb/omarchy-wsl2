@@ -78,6 +78,8 @@ cat <<'EOF'
   CREDENTIALS
     omarchy-wsl-keyring            fix "System keychain unavailable" prompts
     omarchy-wsl-keyring --status   what's running
+    omarchy-wsl-keyring --unlock   stop "Unlock Login Keyring" pop-ups
+    omarchy-wsl-keyring --reset    forgotten password: start over (backs up)
 
   DIAGNOSTICS
     omarchy-wsl-doctor             check WSLg / GPU / systemd / desktop
