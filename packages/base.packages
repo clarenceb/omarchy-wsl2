@@ -70,6 +70,17 @@ plocate
 socat
 imagemagick
 
+# --- credentials ---
+# A Secret Service provider, so GitHub Copilot CLI, gh and git store tokens
+# properly instead of offering to write them to a plaintext config file.
+# In base rather than apps: those are all terminal tools, needed headless.
+gnome-keyring
+libsecret
+
+# pkill/pgrep. Part of Arch's mandatory 'base' group, but listed explicitly
+# because omarchy-wsl-keyring and omarchy-wsl-bg both depend on it.
+procps-ng
+
 # --- terminfo ---
 # Without a terminfo entry for $TERM, bash's readline switches itself off and
 # arrow keys print ^[[A instead of editing the line. kitty and foot ship their

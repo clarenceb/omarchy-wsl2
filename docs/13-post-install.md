@@ -265,6 +265,33 @@ omarchy-wsl-bg
 
 ---
 
+## Everything here is baked into the image
+
+Nothing on this page needs applying by hand after a build. Each fix lives in
+the build itself:
+
+| Fix | Where it lives |
+|---|---|
+| The `omarchy-wsl-*` helpers, `xdg-terminal-exec` | `overlay/usr/local/bin/`, installed by `60-wsl.sh` |
+| `$TERM` repair | `overlay/etc/profile.d/omarchy-wsl-term.sh`, installed by `60-wsl.sh` |
+| `~/.bash_profile`, readline settings | `50-user.sh` |
+| sway config, waybar, wofi, mako, window rules | `40-desktop.sh` |
+| Desktop entries and `Hidden=true` suppressions | `40-desktop.sh` |
+| Keyring started with the session | `40-desktop.sh` |
+| Fallback wallpapers | `make logo` → `40-desktop.sh` |
+| Cursor theme, keyring, terminfo packages | `packages/*.packages` |
+
+`omarchy-wsl-doctor` verifies the ones that fail silently — terminfo, the
+`.bash_profile` chain, `xdg-terminal-exec`, the cursor theme and the keyring
+— so a regression shows up as a warning rather than as a mystery months later.
+
+If you applied any of these by hand to an older distro, a rebuild replaces
+them properly:
+
+```bash
+cd ~/development/omarchy-wsl2 && ./omarchy-wsl2
+```
+
 ## When something doesn't work
 
 1. `omarchy-wsl-doctor` — it explains failures, not just reports them

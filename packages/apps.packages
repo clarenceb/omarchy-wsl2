@@ -10,8 +10,6 @@ xdg-desktop-portal-gtk
 xdg-utils
 xdg-user-dirs
 gvfs
-gnome-keyring
-libsecret
 
 # --- fonts (Omarchy leans heavily on Nerd Font glyphs) ---
 noto-fonts

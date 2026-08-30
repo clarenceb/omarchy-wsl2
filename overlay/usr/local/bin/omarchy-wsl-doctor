@@ -125,6 +125,35 @@ if command -v Hyprland >/dev/null 2>&1 || command -v hyprland >/dev/null 2>&1; t
   hmm "Hyprland present, but it cannot start on WSL2 (no DRM node for its GBM allocator)"
   printf '      See docs/12-wayland-on-wsl2.md; use omarchy-wsl-desktop instead\n'
 fi
+# Regression checks for problems that are silent until they bite.
+if [[ -n ${TERM:-} ]] && command -v infocmp >/dev/null 2>&1; then
+  if infocmp "$TERM" >/dev/null 2>&1; then
+    ok "terminfo for TERM=$TERM (readline and arrow keys work)"
+  else
+    hmm "No terminfo for TERM=$TERM - arrow keys will print ^[[A"
+    printf '      Fix: /etc/profile.d/omarchy-wsl-term.sh should repair this\n'
+  fi
+fi
+
+if [[ -f $HOME/.bash_profile ]] && grep -q bashrc "$HOME/.bash_profile" 2>/dev/null; then
+  ok ".bash_profile chains to .bashrc (login shells configured)"
+else
+  hmm ".bash_profile missing, or does not source .bashrc"
+  printf '      Login shells (wsl -d ...) will skip your shell configuration\n'
+fi
+
+command -v xdg-terminal-exec >/dev/null 2>&1 \
+  && ok "xdg-terminal-exec present (Omarchy's TUI launcher entries work)" \
+  || hmm "xdg-terminal-exec missing - btop/Docker/Disk Usage will silently fail in the launcher"
+
+if compgen -G '/usr/share/icons/Adwaita/cursors/*' >/dev/null 2>&1 \
+   || compgen -G '/usr/share/icons/*/cursors/*' >/dev/null 2>&1; then
+  ok "XCursor theme installed (pointer visible over Wayland windows)"
+else
+  hmm "No XCursor theme - the mouse pointer disappears over Wayland windows"
+  printf '      Fix: sudo pacman -Syu adwaita-cursors\n'
+fi
+
 if command -v gnome-keyring-daemon >/dev/null 2>&1; then
   if [[ -n ${GNOME_KEYRING_CONTROL:-} ]] || [[ -S ${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/keyring/control ]]; then
     ok "Secret Service keyring running (credentials can be stored securely)"
