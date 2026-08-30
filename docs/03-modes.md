@@ -173,11 +173,49 @@ flowchart LR
 ```
 
 This works because wlroots' Wayland backend accepts `wl_shm` buffers — the
-very thing WSLg does offer. Maximise the window like any other.
+very thing WSLg does offer.
+
+#### Moving and resizing the window
+
+The window has **no titlebar**. WSLg's compositor does not advertise
+`zxdg_decoration_manager_v1`, so sway cannot request a server-side one, and it
+draws no client-side one for its own backend output. There is genuinely
+nothing to drag.
+
+Windows still manages the window, and reserves its own `Win` shortcuts before
+any application sees them — so these all work:
+
+| Keys | Action |
+|---|---|
+| `Win+Up` | Maximise |
+| `Win+Down` | Restore, then minimise |
+| `Win+Left` / `Win+Right` | Snap to the left or right half of the screen |
+| `Win+Shift+Left` / `Win+Shift+Right` | Move to the previous/next monitor |
+| `Win+Shift+Up` | Stretch to full height |
+| `Win+Home` | Minimise everything else |
+
+**To move it freely**, use the Windows system menu from the *taskbar* — this
+is outside the guest, so WSLg cannot intercept it:
+
+1. **Shift + right-click** the window's taskbar button
+2. Choose **Move**
+3. Use the **arrow keys**, or move the mouse, then press **Enter**
+
+**To set the size up front**, or change it while running:
+
+```bash
+omarchy-wsl-desktop --size 1600x900     # at launch
+swaymsg output WL-1 resolution 1920x1080 # from inside the session
+```
+
+`Alt+Space` does **not** open the system menu here: WSLg forwards ordinary
+keystrokes to the focused Linux application, so sway receives it instead of
+Windows.
 
 **Pros:** low latency, clipboard integration, no VNC client needed.
-**Cons:** it's a window, not a session; the outer compositor owns some input
-focus, so session-lock and global-hotkey behaviour is imperfect.
+**Cons:** it's a window with no frame; WSLg claims many `SUPER` combinations
+before sway sees them, so keybindings and session-lock behave imperfectly.
+Use VNC if either matters.
 
 ### Mode 3b — Headless + VNC  *(recommended)*
 

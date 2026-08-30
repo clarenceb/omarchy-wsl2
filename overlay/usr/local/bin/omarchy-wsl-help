@@ -18,10 +18,17 @@ cat <<'EOF'
   MODE 3  Full desktop (sway - Hyprland cannot run under WSL2)
     omarchy-wsl-desktop            nested inside WSLg (one window)
     omarchy-wsl-desktop --size 1600x900   set that window's size
-       No titlebar: WSLg offers no decoration protocol, so nothing to drag.
-       Move it:   Shift+right-click its taskbar button -> Move -> arrow keys
-       Snap it:   Win+Up / Win+Left / Win+Right
-       Alt+Space does NOT work (WSLg sends it to sway, not Windows).
+
+  NESTED WINDOW CONTROLS  (it has no titlebar - WSLg offers no decoration
+  protocol, so there is nothing to drag. These are Windows' own keys.)
+      Win+Up                 maximise
+      Win+Down               restore, then minimise
+      Win+Left / Win+Right   snap to the left / right half
+      Win+Shift+Left/Right   move to another monitor
+      Win+Shift+Up           stretch to full height
+      Shift+right-click its taskbar button -> Move -> arrow keys -> Enter
+      Alt+Space does NOT work: WSLg sends it to sway, not to Windows.
+      Resize while running:  swaymsg output WL-1 resolution 1920x1080
     omarchy-wsl-desktop vnc        full screen over VNC on 127.0.0.1:5900
     omarchy-wsl-desktop vnc --size 2560x1440 --port 5901
     omarchy-wsl-desktop --floating draggable windows with titlebars

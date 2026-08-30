@@ -80,6 +80,16 @@ upstream commands assume a running Hyprland/Quickshell session.
 - `omarchy-wsl-desktop --compositor hyprland` — demonstrates the Hyprland
   failure described above; it is expected to fail
 
+**The nested window has no titlebar.** WSLg does not advertise
+`zxdg_decoration_manager_v1`, so sway cannot request a server-side decoration
+and draws no client-side one: there is nothing to drag. Windows still manages
+the window, so answer questions about moving it with Windows' own shortcuts -
+`Win+Up` maximise, `Win+Down` restore/minimise, `Win+Left`/`Win+Right` snap to
+half, `Win+Shift+Left`/`Right` move between monitors, `Win+Shift+Up` full
+height - or Shift+right-clicking its taskbar button and choosing Move, then
+arrow keys. `Alt+Space` does NOT work: WSLg forwards it to sway. `--size WxH`
+sets the size at launch, `swaymsg output WL-1 resolution WxH` while running.
+
 **Backgrounds**
 - `omarchy-wsl-bg` — list available backgrounds, `*` marks the current one
 - `omarchy-wsl-bg <n>` / `omarchy-wsl-bg next` — set the nth, or cycle

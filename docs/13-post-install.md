@@ -56,6 +56,19 @@ omarchy-wsl-desktop --tiling             # Omarchy's tiling model (default)
 and it composites once instead of twice. See
 [03-modes.md](03-modes.md#mode-3b--headless--vnc-recommended).
 
+**The nested window has no titlebar** — WSLg offers no decoration protocol, so
+there is nothing to drag. Windows' own shortcuts still work on it:
+
+| Keys | Action |
+|---|---|
+| `Win+Up` | Maximise |
+| `Win+Left` / `Win+Right` | Snap to half the screen |
+| `Win+Down` | Restore / minimise |
+| `Win+Shift+Left` / `Right` | Move to another monitor |
+| Shift + right-click its taskbar button → **Move** | Then arrow keys to position it |
+
+`Alt+Space` does not work: WSLg sends it to sway, not to Windows.
+
 **Shutting the desktop down.** In order of cleanliness:
 
 | How | What happens |
