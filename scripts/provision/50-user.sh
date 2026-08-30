@@ -71,8 +71,26 @@ fi
 cat >>"$USER_HOME/.bashrc" <<'EOF'
 
 # ---- omarchy-wsl2 ----
+# TERM sanity first: without a resolvable terminfo entry readline switches
+# itself off and arrow keys print ^[[A instead of editing the line. profile.d
+# only runs for login shells, and terminals opened from the desktop launcher
+# are not login shells, so source it here too.
+[ -f /etc/profile.d/omarchy-wsl-term.sh ] && . /etc/profile.d/omarchy-wsl-term.sh
 [ -f /etc/profile.d/omarchy.sh ] && . /etc/profile.d/omarchy.sh
 [ -f "$HOME/.config/omarchy-wsl2/env.sh" ] && . "$HOME/.config/omarchy-wsl2/env.sh"
+
+# Interactive-shell quality of life. Guarded so scp/rsync stay unaffected.
+case $- in
+  *i*)
+    # Readline: history search on Up/Down, and sane word behaviour.
+    bind '"\e[A": history-search-backward' 2>/dev/null
+    bind '"\e[B": history-search-forward'  2>/dev/null
+    bind 'set completion-ignore-case on'    2>/dev/null
+    bind 'set show-all-if-ambiguous on'     2>/dev/null
+    # Don't let a stray Ctrl-S freeze the terminal.
+    [ -t 0 ] && stty -ixon 2>/dev/null
+    ;;
+esac
 EOF
 cp "$USER_HOME/.bashrc" /etc/skel/.bashrc
 

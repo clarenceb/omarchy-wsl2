@@ -299,6 +299,7 @@ instructions for building the missing packages from source.
 | [10-reference.md](docs/10-reference.md) | Env vars, file layout, upstream sources |
 | [11-omarchy-learn.md](docs/11-omarchy-learn.md) | The built-in AI tutor: install, usage, memory |
 | [12-wayland-on-wsl2.md](docs/12-wayland-on-wsl2.md) | **Why Hyprland can't run on WSL2**, and what does |
+| [13-post-install.md](docs/13-post-install.md) | **Start here after installing.** Every helper, the wizard, sane defaults |
 
 ---
 

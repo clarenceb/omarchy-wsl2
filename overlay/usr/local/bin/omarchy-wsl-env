@@ -78,6 +78,55 @@ owsl_ensure_dbus() {
   return 1
 }
 
+# A Secret Service provider is needed by anything that stores credentials:
+# GitHub Copilot CLI, gh, git-credential-libsecret, VS Code. Without one they
+# fall back to plaintext files, or prompt:
+#
+#     System keychain unavailable. Store token in plaintext config file? (y/N)
+#
+# On a desktop this is started by the display manager and unlocked by PAM at
+# login. WSL has neither, so start it here.
+#
+# The keyring is unlocked with an empty password, which makes it usable
+# without an interactive prompt on every session. That is a deliberate
+# trade-off for WSL: the keyring file lives inside your distro's VHDX, which
+# is already readable by anything running as you. It is meaningfully better
+# than plaintext config (secrets are not sitting in a dotfile that gets
+# rsynced, committed or copied to /mnt/c by accident) but it is NOT protection
+# against someone with access to your Windows account. Set a real password
+# with `omarchy-wsl-keyring --password` if you want that.
+owsl_ensure_keyring() {
+  command -v gnome-keyring-daemon >/dev/null 2>&1 || return 1
+  [[ -n ${GNOME_KEYRING_CONTROL:-} ]] && return 0
+
+  owsl_ensure_dbus || return 1
+
+  local rt="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  if [[ -S "$rt/keyring/control" ]]; then
+    export GNOME_KEYRING_CONTROL="$rt/keyring"
+    [[ -S "$rt/keyring/ssh" && -z ${SSH_AUTH_SOCK:-} ]] \
+      && export SSH_AUTH_SOCK="$rt/keyring/ssh"
+    return 0
+  fi
+
+  local out
+  # --unlock reads the password from stdin; an empty line unlocks a keyring
+  # created with an empty password, and is ignored otherwise.
+  out=$(printf '\n' | gnome-keyring-daemon --start --components=secrets,ssh \
+        2>/dev/null) || return 1
+
+  # The daemon prints VAR=value lines for us to adopt.
+  local line
+  while IFS= read -r line; do
+    case "$line" in
+      GNOME_KEYRING_CONTROL=*|SSH_AUTH_SOCK=*)
+        export "${line?}" ;;
+    esac
+  done <<<"$out"
+
+  [[ -n ${GNOME_KEYRING_CONTROL:-} ]]
+}
+
 # Standard WSLg client environment: Wayland + X11 + audio.
 owsl_export_wslg_env() {
   owsl_link_wayland_socket || true
@@ -86,6 +135,7 @@ owsl_export_wslg_env() {
   [[ -S /mnt/wslg/PulseServer ]] && export PULSE_SERVER=/mnt/wslg/PulseServer
 
   owsl_ensure_dbus || true
+  owsl_ensure_keyring || true
 
   export XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-wayland}"
   export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-Hyprland}"

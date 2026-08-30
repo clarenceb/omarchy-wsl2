@@ -27,6 +27,16 @@ else
 fi
 install -m 0644 "$SRC_DIR/wsl/terminal-profile.json" /usr/lib/wsl/terminal-profile.json
 
+# TERM/readline sanity for every login shell. See the file for why.
+if [[ -d $SRC_DIR/overlay/etc/profile.d ]]; then
+  info "Installing the profile.d fragments"
+  install -d -m 0755 /etc/profile.d
+  for f in "$SRC_DIR/overlay/etc/profile.d/"*.sh; do
+    [[ -e $f ]] || continue
+    install -m 0644 -o root -g root "$f" "/etc/profile.d/$(basename "$f")"
+  done
+fi
+
 info "Installing the omarchy-wsl-* helpers"
 install -d -m 0755 /usr/local/bin
 for f in "$SRC_DIR/overlay/usr/local/bin/"*; do

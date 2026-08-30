@@ -125,6 +125,17 @@ if command -v Hyprland >/dev/null 2>&1 || command -v hyprland >/dev/null 2>&1; t
   hmm "Hyprland present, but it cannot start on WSL2 (no DRM node for its GBM allocator)"
   printf '      See docs/12-wayland-on-wsl2.md; use omarchy-wsl-desktop instead\n'
 fi
+if command -v gnome-keyring-daemon >/dev/null 2>&1; then
+  if [[ -n ${GNOME_KEYRING_CONTROL:-} ]] || [[ -S ${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/keyring/control ]]; then
+    ok "Secret Service keyring running (credentials can be stored securely)"
+  else
+    hmm "Keyring not running - tools will offer to store tokens in plaintext"
+    printf '      Fix: omarchy-wsl-keyring\n'
+  fi
+else
+  hmm "gnome-keyring not installed - credential storage will be plaintext"
+fi
+
 for c in omarchy-theme-set waybar foot wayvnc; do
   command -v "$c" >/dev/null 2>&1 && ok "$c" || hmm "$c not installed"
 done

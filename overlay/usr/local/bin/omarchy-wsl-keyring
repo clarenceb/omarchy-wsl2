@@ -1,0 +1,144 @@
+#!/bin/bash
+# omarchy-wsl-keyring - set up the Secret Service keyring under WSL2.
+#
+# WHY THIS EXISTS
+# ---------------
+# Tools that store credentials - GitHub Copilot CLI, gh, git's libsecret
+# helper, VS Code - look for a Secret Service provider on D-Bus. On a normal
+# desktop that is gnome-keyring, started by the display manager and unlocked
+# by PAM when you log in. WSL has no display manager and no PAM login, so
+# nothing starts it and you get:
+#
+#     System keychain unavailable. Store token in plaintext config file? (y/N)
+#
+# This creates the login keyring, starts the daemon, and verifies it works.
+#
+# Usage:
+#   omarchy-wsl-keyring              set up with an empty password (default)
+#   omarchy-wsl-keyring --password   set up with a password you type each session
+#   omarchy-wsl-keyring --status     report what is running
+#   omarchy-wsl-keyring --test       store and read back a test secret
+
+set -euo pipefail
+source /usr/local/bin/omarchy-wsl-env
+
+B=$'\033[1m'; R=$'\033[0m'
+ok()   { printf '  \033[32m✔\033[0m %s\n' "$*"; }
+bad()  { printf '  \033[31m✖\033[0m %s\n' "$*"; }
+note() { printf '    %s\n' "$*"; }
+
+KEYRING_DIR="$HOME/.local/share/keyrings"
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || {
+    bad "$1 is not installed"
+    note "sudo pacman -Syu --needed gnome-keyring libsecret"
+    exit 1
+  }
+}
+
+status() {
+  printf '\n%sKeyring status%s\n\n' "$B" "$R"
+  command -v gnome-keyring-daemon >/dev/null 2>&1 \
+    && ok "gnome-keyring-daemon installed" || bad "gnome-keyring-daemon missing"
+  command -v secret-tool >/dev/null 2>&1 \
+    && ok "secret-tool installed (libsecret)" || bad "secret-tool missing"
+
+  [[ -n ${DBUS_SESSION_BUS_ADDRESS:-} ]] \
+    && ok "session D-Bus: ${DBUS_SESSION_BUS_ADDRESS}" \
+    || bad "no session D-Bus - credentials cannot work without it"
+
+  if [[ -n ${GNOME_KEYRING_CONTROL:-} ]]; then
+    ok "keyring daemon: $GNOME_KEYRING_CONTROL"
+  else
+    bad "keyring daemon not running in this shell"
+  fi
+
+  if compgen -G "$KEYRING_DIR/*.keyring" >/dev/null; then
+    ok "keyrings present: $(basename -a "$KEYRING_DIR"/*.keyring | tr '\n' ' ')"
+  else
+    bad "no keyring has been created yet"
+  fi
+  printf '\n'
+}
+
+test_secret() {
+  need secret-tool
+  if ! secret-tool store --label='omarchy-wsl2 test' \
+        service omarchy-wsl2 key test <<<'hello' 2>/dev/null; then
+    bad "could not store a secret"
+    return 1
+  fi
+  local got
+  got=$(secret-tool lookup service omarchy-wsl2 key test 2>/dev/null || true)
+  secret-tool clear service omarchy-wsl2 key test 2>/dev/null || true
+  if [[ $got == hello ]]; then
+    ok "stored and read back a test secret - the keychain works"
+    return 0
+  fi
+  bad "stored a secret but could not read it back"
+  return 1
+}
+
+setup() {
+  local use_password="${1:-0}"
+  need gnome-keyring-daemon
+
+  owsl_ensure_dbus || { bad "could not start a session D-Bus"; exit 1; }
+  mkdir -p "$KEYRING_DIR"
+
+  local pw=""
+  if (( use_password )); then
+    printf 'Password for the login keyring (you will type this once per session): '
+    read -rs pw; echo
+    [[ -z $pw ]] && { bad "empty password - use the default mode instead"; exit 1; }
+  fi
+
+  # Kill any half-started daemon so --unlock definitely creates the keyring.
+  pkill -x gnome-keyring-daemon 2>/dev/null || true
+  sleep 0.3
+
+  local out
+  out=$(printf '%s\n' "$pw" | gnome-keyring-daemon --unlock 2>/dev/null) || true
+  out+=$'\n'
+  out+=$(printf '%s\n' "$pw" \
+         | gnome-keyring-daemon --start --components=secrets,ssh 2>/dev/null) || true
+
+  local line
+  while IFS= read -r line; do
+    case "$line" in
+      GNOME_KEYRING_CONTROL=*|SSH_AUTH_SOCK=*) export "${line?}" ;;
+    esac
+  done <<<"$out"
+
+  if [[ -z ${GNOME_KEYRING_CONTROL:-} ]]; then
+    bad "the daemon did not start"
+    note "Try: omarchy-wsl-keyring --status"
+    exit 1
+  fi
+
+  ok "keyring daemon started"
+  test_secret || exit 1
+
+  printf '\n%sDone.%s New shells pick this up automatically.\n' "$B" "$R"
+  if (( use_password )); then
+    note "You will be asked to unlock once per session."
+  else
+    note "The keyring has an empty password, so it unlocks without prompting."
+    note "It lives in $KEYRING_DIR, inside this distro's VHDX."
+    note "Better than plaintext config, but not protection against someone"
+    note "who already has your Windows account. Use --password for that."
+  fi
+  printf '\n'
+  note "Now re-run the tool that prompted you, e.g.:  copilot  /login"
+  printf '\n'
+}
+
+case "${1:-}" in
+  ""|--setup)   setup 0 ;;
+  --password)   setup 1 ;;
+  --status)     status ;;
+  --test)       status; test_secret ;;
+  -h|--help)    sed -n '16,21p' "$0" | sed 's/^# \?//' ;;
+  *) echo "unknown option: $1" >&2; exit 1 ;;
+esac

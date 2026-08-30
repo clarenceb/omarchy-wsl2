@@ -164,6 +164,9 @@ xwayland disable
 # left in place but is Hyprland-specific.
 exec_always --no-startup-id waybar -c ~/.config/waybar-sway/config.jsonc -s ~/.config/waybar-sway/style.css
 exec --no-startup-id mako
+# Secret Service provider, so Copilot CLI / gh / VS Code can store tokens
+# instead of falling back to plaintext. See omarchy-wsl-keyring.
+exec --no-startup-id sh -c 'command -v gnome-keyring-daemon >/dev/null 2>&1 && printf "\n" | gnome-keyring-daemon --start --components=secrets,ssh >/dev/null 2>&1 || true'
 # Omarchy keeps the active wallpaper at ~/.config/omarchy/current/background,
 # which is a symlink that only exists once a theme has been applied. swaybg
 # does NOT exit non-zero on a missing image - it just logs "Could not find
@@ -181,7 +184,7 @@ EOF
 # Appended outside the quoted heredoc so $TERMINAL expands to the terminal we
 # actually found at build time.
 cat >>/etc/skel/.config/sway/config <<EOF
-exec --no-startup-id sh -c 'grep -qs no-welcome "\$HOME/.config/sway/local.conf" || exec $TERMINAL -e sh -lc "omarchy-wsl-help; exec bash"'
+exec --no-startup-id sh -c 'grep -qs no-welcome "\$HOME/.config/sway/local.conf" || exec $TERMINAL -e bash -lic "omarchy-wsl-help; exec bash -i"'
 EOF
 
 cat >>/etc/skel/.config/sway/config <<'EOF'

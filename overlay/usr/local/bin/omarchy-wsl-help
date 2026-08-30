@@ -68,6 +68,10 @@ cat <<'EOF'
     omarchy-pkg-add <pkg>          Omarchy's wrapper for the same
     pacman -Q                      list what's installed
 
+  CREDENTIALS
+    omarchy-wsl-keyring            fix "System keychain unavailable" prompts
+    omarchy-wsl-keyring --status   what's running
+
   DIAGNOSTICS
     omarchy-wsl-doctor             check WSLg / GPU / systemd / desktop
 
@@ -89,7 +93,7 @@ cat <<'EOF'
     code .                         open VS Code (WSL remote)
     wsl.exe --shutdown             (from Windows) restart the VM
 
-  Docs: /usr/share/omarchy-wsl2/docs  (start with 03-modes.md)
+  Docs: /usr/share/omarchy-wsl2/docs  (start with 13-post-install.md)
         Why sway and not Hyprland: 12-wayland-on-wsl2.md
         Upstream manual: https://omarchy.org/manual/
 

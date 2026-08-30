@@ -69,3 +69,11 @@ dbus
 plocate
 socat
 imagemagick
+
+# --- terminfo ---
+# Without a terminfo entry for $TERM, bash's readline switches itself off and
+# arrow keys print ^[[A instead of editing the line. kitty and foot ship their
+# entries in separate packages; alacritty's lives in the main one.
+ncurses
+foot-terminfo
+kitty-terminfo

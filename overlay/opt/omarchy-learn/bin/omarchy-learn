@@ -349,14 +349,22 @@ topics() {
       oml "what's the pacman equivalent of apt search"
       oml "how do I install something from the AUR"
 
+    ${GREY}This setup's own helpers${R}
+      oml "what omarchy-wsl helpers are available"
+      oml "how do I change the desktop background"
+      oml "how do I run the desktop full screen over VNC"
+      oml "how do I switch between tiling and floating windows"
+      oml "what are the desktop keybindings"
+
     ${GREY}Omarchy${R}
       oml "how do I change the theme"
-      oml "what are the essential Hyprland keybindings"
       oml "how does omarchy-update work"
+      oml "what does omarchy-pkg-add do"
 
     ${GREY}WSL2${R}
-      oml "why can't I run the full Hyprland desktop"
-      oml "how do I launch a GUI app from Omarchy"
+      oml "why is the desktop sway and not Hyprland"
+      oml "how do I launch a GUI app with GPU acceleration"
+      oml "why does video playback feel slow in the desktop"
       oml "how do I back up my distro"
 
     ${GREY}Coming from Ubuntu${R}
