@@ -94,6 +94,23 @@ esac
 EOF
 cp "$USER_HOME/.bashrc" /etc/skel/.bashrc
 
+# A login shell reads ~/.bash_profile (or ~/.bash_login / ~/.profile) and
+# NOT ~/.bashrc. `wsl -d <distro>` starts a login shell, so without this file
+# none of the block above runs there: no prompt, no aliases, and - because the
+# TERM repair lives in it - arrow keys printing ^[[A in Windows Terminal while
+# working fine in a terminal opened from the desktop, which is not a login
+# shell. Chain the two together, the conventional way.
+if [[ ! -f $USER_HOME/.bash_profile ]]; then
+  info "Installing ~/.bash_profile so login shells read ~/.bashrc"
+  cat >"$USER_HOME/.bash_profile" <<'EOF'
+# Login shells read this file, not ~/.bashrc. Chain them so both behave the
+# same - written by omarchy-wsl2.
+[ -f "$HOME/.profile" ] && . "$HOME/.profile"
+[ -f "$HOME/.bashrc" ]  && . "$HOME/.bashrc"
+EOF
+  cp "$USER_HOME/.bash_profile" /etc/skel/.bash_profile
+fi
+
 # Copy the migration state seeded in stage 20 into the real home.
 if [[ -d /etc/skel/.local/state/omarchy ]]; then
   install -d -m 0755 "$USER_HOME/.local/state"
