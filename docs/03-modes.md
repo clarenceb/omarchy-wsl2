@@ -280,9 +280,13 @@ omarchy-wsl-desktop vnc --bind 0.0.0.0        # only if you really mean it
 ### Choosing tiling or floating
 
 Omarchy is a **tiling** environment: windows arrange themselves, have no
-titlebars, and you drive them from the keyboard. That is the point of it — but
-it is a real adjustment if you are coming from Windows or GNOME, so this
-project makes it a choice.
+titlebars, and you drive them from the keyboard. That is the point of it. DHH
+did not build a distribution around `SUPER+Return` so that you could reach
+over and *drag something*. The mouse is right there, mocking you, and tiling
+mode is the polite suggestion that you leave it alone.
+
+We have added floating mode anyway, for the heretics. Your hand is going to
+find the mouse eventually; you may as well have windows it can pick up.
 
 ```bash
 omarchy-wsl-desktop --floating     # draggable windows with titlebars

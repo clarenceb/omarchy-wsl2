@@ -422,8 +422,8 @@ ask_desktop() {
 
   choose CFG_LAYOUT "How should windows behave?" \
     "$(case $CFG_LAYOUT in floating) echo 2;; *) echo 1;; esac)" \
-    "tiling|Tiling|Windows auto-arrange, no titlebars. Omarchy's model. Keyboard-driven." \
-    "floating|Floating|Draggable windows with titlebars, like Windows or GNOME."
+    "tiling|Tiling|Windows auto-arrange, no titlebars. Omarchy's model. Keyboard only." \
+    "floating|Floating|Draggable windows with titlebars. For mouse users. DHH is watching."
 
   choose CFG_DISPLAY "How should the desktop be displayed?" \
     "$(case $CFG_DISPLAY in nested) echo 1;; *) echo 2;; esac)" \

@@ -46,9 +46,10 @@ actual tooling, dotfiles and themes on WSL2, in three usable modes:
 > that got Hyprland *almost* working, is in
 > **[docs/12-wayland-on-wsl2.md](docs/12-wayland-on-wsl2.md)**.
 >
-> Windows can **tile** (Omarchy's model) or **float** with titlebars if you
-> prefer Windows/GNOME behaviour — the wizard asks, and
-> `omarchy-wsl-desktop --floating` switches any time.
+> Windows can **tile** (Omarchy's model, and DHH's firm view on where your
+> hands belong) or **float** with titlebars if you would like to use the mouse
+> like a normal person — the wizard asks, and `omarchy-wsl-desktop --floating`
+> switches any time.
 > If you want Hyprland itself on Windows, use a Hyper-V VM.
 
 ---
