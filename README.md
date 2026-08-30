@@ -8,6 +8,13 @@
 [![WSL](https://img.shields.io/badge/WSL-%E2%89%A5%202.4.4-5B4BD6.svg)](https://learn.microsoft.com/windows/wsl/)
 [![Arch](https://img.shields.io/badge/base-Arch%20Linux-2AA6C4.svg)](https://archlinux.org/)
 
+<br>
+
+<img src="assets/screenshots/mode3b-vnc.png" alt="A full tiling desktop running under WSL2: LibreOffice, Chromium, btop and a calculator tiled across an Omarchy-themed sway session" width="900">
+
+<sub>A full desktop — LibreOffice, Chromium, btop, tiled — running inside WSL2 on Windows on ARM.<br>
+No dual boot, no VM, no bare metal. See <a href="#the-three-modes">all three modes</a>.</sub>
+
 </div>
 
 ---
