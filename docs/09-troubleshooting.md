@@ -320,6 +320,76 @@ Current builds keep them. On an affected image:
 sudo pacman -Sy --needed <package>
 ```
 
+### `No supported buffer formats were found` from wayvnc
+
+Harmless, and not a sign that VNC is broken — sessions render normally.
+
+wayvnc always prefers the newer `ext-image-copy-capture` protocol whenever the
+compositor advertises it, with **no fallback** to `wlr-screencopy` if format
+negotiation then fails (`src/screencopy-interface.c`):
+
+```c
+if (wayland->ext_image_copy_capture_manager_v1 &&
+        wayland->ext_output_image_capture_source_manager_v1)
+    return ext_image_copy_capture_impl.create(source, render_cursor);
+if (wayland->zwlr_screencopy_manager_v1)
+    return wlr_screencopy_impl.create(source, render_cursor);
+```
+
+sway 1.12 advertises it, but with `WLR_RENDERER=pixman` there are no DMA-BUF
+formats to offer, so the cursor capture session reports no usable formats. The
+main capture still succeeds, which is why the desktop appears regardless.
+
+The same reasoning explains the two MESA-EGL warnings on startup:
+
+```
+MESA-EGL: warning: failed to get driver name for fd -1
+MESA-EGL: warning: MESA-LOADER: failed to retrieve device information
+```
+
+`fd -1` is the absent DRM node. Expected on WSL2 — see
+[12-wayland-on-wsl2.md](12-wayland-on-wsl2.md).
+
+### My `--floating` setting disappeared
+
+`--floating` and `--tiling` write to `~/.config/sway/local.conf`. Copying a
+fresh set of configs over `~/.config/sway/` replaces that file with the empty
+stub, silently reverting you to the default layout. Re-apply afterwards:
+
+```bash
+omarchy-wsl-desktop --floating
+```
+
+Check what is actually in effect while a session is running:
+
+```bash
+export SWAYSOCK=$(ls -t "$XDG_RUNTIME_DIR"/sway-ipc.* | head -1)
+swaymsg -t get_tree | grep -E '"(name|type|floating|border)"'
+```
+
+A floating window shows `"type": "floating_con"` and `"border": "normal"`.
+
+### Windows won't move or resize with the mouse
+
+Tiled windows have no titlebar by design — that is what a tiling WM is. Use:
+
+| Input | Action |
+|---|---|
+| `SUPER` + left-drag | Move a floating window |
+| `SUPER` + right-drag | Resize any window |
+| `SUPER+SHIFT+Space` | Toggle the focused window between tiled and floating |
+| `SUPER+R` | Resize mode: arrows or `hjkl`, `Esc` to finish |
+
+If `SUPER`+drag does nothing at all, your config predates `floating_modifier`.
+Confirm it is present:
+
+```bash
+grep floating_modifier ~/.config/sway/config
+```
+
+If it is missing, the image is older than the desktop rework — rebuild, or
+copy `overlay/` and the generated configs from a current checkout.
+
 ### VNC client can't connect
 
 ```bash
