@@ -159,6 +159,30 @@ fi
 command -v sway >/dev/null 2>&1 \
   || { echo "sway is not installed. Rebuild with PROFILE=desktop." >&2; exit 1; }
 
+# Ask sway to exit properly rather than signalling it. `swaymsg exit` lets the
+# compositor tear its clients down in order; SIGTERM is the fallback for when
+# the IPC socket has already gone.
+shutdown_sway() {
+  local pid="${1:-}" sock="${2:-}"
+  [[ -n $pid ]] || return 0
+  kill -0 "$pid" 2>/dev/null || return 0
+
+  if [[ -n $sock && -S $sock ]]; then
+    swaymsg -s "$sock" exit >/dev/null 2>&1 || true
+    for _ in $(seq 1 20); do
+      kill -0 "$pid" 2>/dev/null || return 0
+      sleep 0.25
+    done
+  fi
+
+  kill "$pid" 2>/dev/null || true
+  for _ in $(seq 1 20); do
+    kill -0 "$pid" 2>/dev/null || return 0
+    sleep 0.25
+  done
+  kill -9 "$pid" 2>/dev/null || true
+}
+
 case "$MODE" in
   # -------------------------------------------------------------- nested ---
   nested)
@@ -184,9 +208,9 @@ case "$MODE" in
 
     sway &
     SWAY_PID=$!
-    trap 'kill "$SWAY_PID" 2>/dev/null || true' EXIT INT TERM
-
     SWAYSOCK="$XDG_RUNTIME_DIR/sway-ipc.$(id -u).$SWAY_PID.sock"
+    trap 'shutdown_sway "$SWAY_PID" "$SWAYSOCK"' EXIT INT TERM
+
     for _ in $(seq 1 60); do
       [[ -S $SWAYSOCK ]] && break
       kill -0 "$SWAY_PID" 2>/dev/null || break
@@ -218,10 +242,9 @@ case "$MODE" in
     echo "Starting the desktop on a virtual ${SIZE} output..."
     sway &
     SWAY_PID=$!
-    trap 'kill "$SWAY_PID" 2>/dev/null || true' EXIT INT TERM
-
     # sway names its IPC socket deterministically from uid + pid.
     SWAYSOCK="$XDG_RUNTIME_DIR/sway-ipc.$(id -u).$SWAY_PID.sock"
+    trap 'shutdown_sway "$SWAY_PID" "$SWAYSOCK"' EXIT INT TERM
 
     for _ in $(seq 1 60); do
       [[ -S $SWAYSOCK ]] && break
@@ -251,8 +274,12 @@ case "$MODE" in
     echo
     echo "  Connect a VNC client on Windows to:  ${BIND}:${PORT}"
     echo "  Output: ${OUTPUT} @ ${SIZE}"
-    echo "  Press Ctrl-C to shut the desktop down."
+    echo "  Ctrl-C here, or SUPER+SHIFT+E in the session, shuts it down cleanly."
     echo
-    exec wayvnc -o "$OUTPUT" "$BIND" "$PORT"
+
+    # NOT exec: that would replace this shell and discard the trap above,
+    # leaving sway orphaned whenever wayvnc exits on its own.
+    wayvnc -o "$OUTPUT" "$BIND" "$PORT" || true
+    shutdown_sway "$SWAY_PID" "$SWAYSOCK"
     ;;
 esac

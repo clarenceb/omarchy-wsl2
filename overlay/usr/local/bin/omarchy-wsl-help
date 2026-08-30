@@ -54,7 +54,10 @@ cat <<'EOF'
       SUPER+B / E            browser / file manager
       Print / Shift+Print    region screenshot / full screen to clipboard
       SUPER+Shift+R          reload config
-      SUPER+Shift+E          exit the session
+      SUPER+Shift+E          exit the session (the cleanest way out)
+
+    Ctrl-C on the launching terminal is also safe: it asks sway to exit
+    over IPC first, then falls back to SIGTERM.
 
     Note: nested in WSLg, Windows claims some SUPER combos first.
           VNC mode does not have this problem.

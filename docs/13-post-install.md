@@ -56,6 +56,20 @@ omarchy-wsl-desktop --tiling             # Omarchy's tiling model (default)
 and it composites once instead of twice. See
 [03-modes.md](03-modes.md#mode-3b--headless--vnc-recommended).
 
+**Shutting the desktop down.** In order of cleanliness:
+
+| How | What happens |
+|---|---|
+| `SUPER+Shift+E` in the session | sway exits properly, tearing clients down in order. **Best.** |
+| `swaymsg exit` from another shell | Identical, just triggered externally |
+| `Ctrl-C` on the launching terminal | The launcher asks sway to exit via IPC, then falls back to `SIGTERM`, then `SIGKILL`. Safe |
+| Closing the nested window | Same as `SIGTERM` to sway |
+| `wsl --terminate <distro>` | Kills the whole VM. Fine, but nothing gets to save state |
+
+`Ctrl-C` is **not** harmful — the launcher traps it and shuts sway down
+gracefully. The only real cost of an abrupt exit is that applications don't
+get to save unsaved work, exactly as on any desktop.
+
 ### Backgrounds — `omarchy-wsl-bg`
 
 ```bash
