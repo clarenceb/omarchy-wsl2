@@ -203,6 +203,24 @@ flowchart LR
 
 ## The three modes
 
+<div align="center">
+
+<!-- Screenshots: see assets/screenshots/README.md for capture and naming
+     guidance. Delete any row below that you have not captured yet - a broken
+     image is worse than no image. -->
+
+| Mode 1 — headless | Mode 2 — WSLg apps |
+|:---:|:---:|
+| <img src="assets/screenshots/mode1-headless.png" alt="Omarchy CLI in Windows Terminal" width="400"> | <img src="assets/screenshots/mode2-wslg-apps.png" alt="A GUI app as a Windows window" width="400"> |
+| Omarchy's terminal environment in Windows Terminal | Individual GUI apps, indistinguishable from native |
+
+| Mode 3a — nested | Mode 3b — VNC |
+|:---:|:---:|
+| <img src="assets/screenshots/mode3a-nested.png" alt="The sway desktop nested in a WSLg window" width="400"> | <img src="assets/screenshots/mode3b-vnc.png" alt="The desktop full screen over VNC" width="400"> |
+| The tiling desktop in a window, beside your Windows apps | Full screen over VNC — the recommended mode |
+
+</div>
+
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'primaryColor':'#E8F6FB','primaryTextColor':'#13233A','primaryBorderColor':'#2AA6C4','lineColor':'#5B4BD6','fontSize':'14px'}}}%%
 flowchart TB

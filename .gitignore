@@ -11,6 +11,10 @@ assets/*.ico
 !assets/logo-256.png
 !assets/omarchy-learn-256.png
 
+# Screenshots are hand-made, not generated - always commit them.
+!assets/screenshots/
+!assets/screenshots/**
+
 # Editor / OS noise
 .DS_Store
 *.swp
