@@ -13,9 +13,15 @@ owsl_is_wsl() {
 # Find the socket wherever it actually lives.
 owsl_find_wayland_socket() {
   local d s
-  for d in "${XDG_RUNTIME_DIR:-}" /mnt/wslg/runtime-dir "/run/user/$(id -u)"; do
+  # WSLg's own runtime dir is searched FIRST, and its wayland-0 preferred.
+  # This function exists to find WSLg specifically: when a nested compositor
+  # is running it publishes its own socket into XDG_RUNTIME_DIR and sets
+  # WAYLAND_DISPLAY to it, so searching there first made `omarchy-wsl-app`
+  # hand the app to sway instead of WSLg. The app then appeared tiled inside
+  # the session, unmovable, rather than as a Windows window.
+  for d in /mnt/wslg/runtime-dir "${XDG_RUNTIME_DIR:-}" "/run/user/$(id -u)"; do
     [[ -z $d ]] && continue
-    for s in "${WAYLAND_DISPLAY:-wayland-0}" wayland-0 wayland-1; do
+    for s in wayland-0 "${WAYLAND_DISPLAY:-wayland-0}" wayland-1; do
       if [[ -S "$d/$s" ]]; then
         printf '%s\n%s\n' "$d" "$s"
         return 0
@@ -149,6 +155,13 @@ owsl_export_wslg_env() {
   export XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-wayland}"
   export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-Hyprland}"
   export MOZ_ENABLE_WAYLAND=1
+
+  # Wayland has no server-side cursor: every client draws its own from an
+  # XCursor theme. With no theme named, and none installed, the pointer simply
+  # vanishes over Wayland-native windows. Adwaita's cursors ship separately
+  # from its icon theme (GNOME 50 split them into adwaita-cursors).
+  export XCURSOR_THEME="${XCURSOR_THEME:-Adwaita}"
+  export XCURSOR_SIZE="${XCURSOR_SIZE:-24}"
   export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland;xcb}"
   export GDK_BACKEND="${GDK_BACKEND:-wayland,x11}"
   export _JAVA_AWT_WM_NONREPARENTING=1

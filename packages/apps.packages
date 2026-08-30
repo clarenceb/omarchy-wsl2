@@ -23,6 +23,9 @@ woff2-font-awesome
 # --- themes / icons ---
 gnome-themes-extra
 adwaita-icon-theme
+# Cursors ship separately from the icon theme since GNOME 50. Without them
+# the pointer disappears over Wayland windows, which draw their own cursor.
+adwaita-cursors
 
 # --- terminal emulator (Omarchy's default) ---
 foot

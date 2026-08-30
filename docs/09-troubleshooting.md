@@ -389,6 +389,40 @@ Or test the entry's `Exec` line directly:
 grep Exec ~/.local/share/applications/btop.desktop /usr/share/applications/btop.desktop 2>/dev/null
 ```
 
+### The mouse cursor disappears over a window
+
+Wayland has no server-side cursor: every client draws its own from an XCursor
+theme. If no theme is named, or none is installed, the pointer vanishes over
+Wayland-native windows while still showing over the desktop.
+
+```bash
+pacman -Qi adwaita-cursors >/dev/null 2>&1 || sudo pacman -Syu adwaita-cursors
+echo "$XCURSOR_THEME"     # should print Adwaita
+```
+
+Adwaita's cursors ship **separately** from its icon theme (GNOME 50 split them
+into `adwaita-cursors`), so having `adwaita-icon-theme` is not enough. Current
+images install both and export `XCURSOR_THEME`/`XCURSOR_SIZE`.
+
+### `omarchy-wsl-app` opens the app inside the desktop instead of Windows
+
+If a nested sway session is running, it publishes its own Wayland socket into
+`XDG_RUNTIME_DIR` and points `WAYLAND_DISPLAY` at it. Older versions of the
+socket search looked there before WSLg's own runtime directory, so the app was
+handed to sway — appearing tiled inside the session, with no way to move it,
+rather than as a Windows window.
+
+Current versions search `/mnt/wslg/runtime-dir` first. Check which socket you
+are actually on:
+
+```bash
+ls -l /mnt/wslg/runtime-dir/wayland-0 "$XDG_RUNTIME_DIR"/wayland-*
+```
+
+To deliberately run an app *inside* the desktop session, just run it normally
+(`chromium`) from a terminal in that session; `omarchy-wsl-app` always means
+"through WSLg".
+
 ### "Unlock Login Keyring" appears every time I launch an app
 
 The daemon is running but the collection is **locked**. WSL has no PAM login

@@ -151,6 +151,10 @@ input * {
 # Software cursors only - there are no DRM planes to put a hardware one on.
 seat * hide_cursor when-typing enable
 
+# Name a cursor theme explicitly. Wayland clients each draw their own cursor
+# from an XCursor theme; with none named the pointer can vanish entirely.
+seat * xcursor_theme Adwaita 24
+
 # WSLg already owns /tmp/.X11-unix and every display slot in it, so sway's
 # own Xwayland cannot claim one:
 #     xwayland/sockets.c: No display available in the first 33
